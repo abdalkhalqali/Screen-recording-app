@@ -34,14 +34,6 @@ class HomeActivity : AppCompatActivity() {
             showStopRecordingDialog()
         }
 
-        binding.btnStopLogCapture.setOnClickListener {
-            showStopRecordingDialog() // Same as stop recording since it's now unified
-        }
-
-        binding.btnStopBoth.setOnClickListener {
-            showStopRecordingDialog() // Same as stop recording since it's now unified
-        }
-
         binding.btnViewProfile.setOnClickListener {
             Toast.makeText(this, "Profile feature coming soon!", Toast.LENGTH_SHORT).show()
         }
@@ -99,7 +91,7 @@ class HomeActivity : AppCompatActivity() {
 
             override fun onRecordingStopped(outputFile: File) {
                 runOnUiThread {
-                    showRecordingCompletedDialog(outputFile)
+                    showCompletionDialog("Video Recording Complete!", outputFile, "video")
                     updateStatus()
                 }
             }
@@ -122,7 +114,7 @@ class HomeActivity : AppCompatActivity() {
 
             override fun onLogCaptureStopped(outputFile: File) {
                 runOnUiThread {
-                    showLogCaptureCompletedDialog(outputFile)
+                    showCompletionDialog("Log Capture Complete!", outputFile, "logs")
                     updateStatus()
                 }
             }
@@ -145,50 +137,55 @@ class HomeActivity : AppCompatActivity() {
         val isCapturingLogs = qaSnapRecorder?.isCapturingLogs() ?: false
 
         binding.tvRecordingStatus.text = when {
-            isRecording && isCapturingLogs -> "🔴📋 Recording & Capturing logs..."
-            isRecording -> "🔴 Recording in progress..."
-            isCapturingLogs -> "📋 Capturing logs..."
-            else -> "⭕ Not recording or capturing"
+            isRecording && isCapturingLogs -> "🔴📋 QA Recording Active (Video & Logs)"
+            isRecording -> "🔴 Video Recording Active"
+            isCapturingLogs -> "📋 Log Capture Active"
+            else -> "⭕ Ready to Record"
         }
 
-        binding.btnStopRecording.isEnabled = isRecording
-        binding.btnStopLogCapture.isEnabled = isCapturingLogs
-        binding.btnStopBoth.isEnabled = isRecording || isCapturingLogs
+        binding.btnStopRecording.isEnabled = isRecording || isCapturingLogs
+
+        // Update button text based on what's active
+        binding.btnStopRecording.text = when {
+            isRecording && isCapturingLogs -> "🛑 Stop QA Recording"
+            isRecording -> "🛑 Stop Video Recording"
+            isCapturingLogs -> "🛑 Stop Log Capture"
+            else -> "🛑 Stop Recording"
+        }
     }
 
     private fun showStopRecordingDialog() {
+        val isRecording = qaSnapRecorder?.isRecording() ?: false
+        val isCapturingLogs = qaSnapRecorder?.isCapturingLogs() ?: false
+
+        val title = when {
+            isRecording && isCapturingLogs -> "Stop QA Recording"
+            isRecording -> "Stop Video Recording"
+            isCapturingLogs -> "Stop Log Capture"
+            else -> "Stop Recording"
+        }
+
+        val message = when {
+            isRecording && isCapturingLogs -> "Are you sure you want to stop QA recording? Both screen video and system logs will be saved to your device."
+            isRecording -> "Are you sure you want to stop video recording? The video file will be saved to your device."
+            isCapturingLogs -> "Are you sure you want to stop log capture? The log file will be saved to your device."
+            else -> "No active recording to stop."
+        }
+
         AlertDialog.Builder(this)
-            .setTitle("Stop Recording")
-            .setMessage("Are you sure you want to stop the screen recording and log capture? All data will be saved to your device.")
-            .setPositiveButton("Stop Recording") { _, _ ->
-                qaSnapRecorder?.stopRecording() // This now stops both video and logs
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("Stop") { _, _ ->
+                qaSnapRecorder?.stopRecording() // This stops both video and logs
             }
-            .setNegativeButton("Continue Recording", null)
+            .setNegativeButton("Continue", null)
             .show()
     }
 
-    private fun showStopLogCaptureDialog() {
-        // Redirect to main stop dialog since operations are now unified
-        showStopRecordingDialog()
-    }
-
-    private fun showStopBothDialog() {
-        // Redirect to main stop dialog since operations are now unified  
-        showStopRecordingDialog()
-    }
-
-    private fun showRecordingCompletedDialog(outputFile: File) {
+    private fun showCompletionDialog(title: String, outputFile: File, fileType: String) {
         AlertDialog.Builder(this)
-            .setTitle("Recording Complete!")
-            .setMessage("Your screen recording has been saved successfully!\n\nFile: ${outputFile.name}\nLocation: ${outputFile.absolutePath}")
-            .setPositiveButton("OK", null)
-            .show()
-    }
-
-    private fun showLogCaptureCompletedDialog(outputFile: File) {
-        AlertDialog.Builder(this)
-            .setTitle("Log Capture Complete!")
-            .setMessage("Your log capture has been saved successfully!\n\nFile: ${outputFile.name}\nLocation: ${outputFile.absolutePath}\nSize: ${outputFile.length() / 1024} KB")
+            .setTitle(title)
+            .setMessage("Your $fileType has been saved successfully!\n\nFile: ${outputFile.name}\nLocation: ${outputFile.absolutePath}\nSize: ${outputFile.length() / 1024} KB")
             .setPositiveButton("OK", null)
             .show()
     }

@@ -215,8 +215,8 @@ class ScreenRecordingService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("🔴 Screen Recording Active")
-            .setContentText("Recording your screen...")
+            .setContentTitle("🔴 QA Recording Active")
+            .setContentText("Recording screen & logs...")
             .setSubText("QA Snap Demo")
             .setSmallIcon(android.R.drawable.ic_media_play) // Recording icon
             .setOngoing(true)
@@ -228,7 +228,7 @@ class ScreenRecordingService : Service() {
             .setUsesChronometer(true) // Shows elapsed time automatically
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("Screen recording is in progress. Tap STOP to end recording.")
+                    .bigText("QA recording is in progress. Screen video & system logs are being captured. Tap STOP to end recording.")
             )
             .addAction(
                 NotificationCompat.Action.Builder(
@@ -530,8 +530,8 @@ class ScreenRecordingService : Service() {
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         val completedNotification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("QA Snap Recording Completed")
-            .setContentText("Screen recording has been saved successfully")
+            .setContentTitle("✅ QA Recording Completed")
+            .setContentText("Screen video & logs have been saved successfully")
             .setSubText("Recording finished")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setOngoing(false)
@@ -574,8 +574,8 @@ class ScreenRecordingService : Service() {
         // lastHeartbeat = System.currentTimeMillis()
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("🔴 Screen Recording Active")
-            .setContentText("Recording your screen... ($formattedTime)")
+            .setContentTitle("🔴 QA Recording Active")
+            .setContentText("Recording screen & logs... ($formattedTime)")
             .setSubText("QA Snap Demo")
             .setSmallIcon(android.R.drawable.ic_media_play) // Recording icon
             .setOngoing(true)
@@ -587,7 +587,7 @@ class ScreenRecordingService : Service() {
             .setUsesChronometer(true) // Shows elapsed time automatically
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("Screen recording is in progress. Tap STOP to end recording.")
+                    .bigText("QA recording is in progress. Screen video & system logs are being captured. Tap STOP to end recording.")
             )
             .addAction(
                 NotificationCompat.Action.Builder(

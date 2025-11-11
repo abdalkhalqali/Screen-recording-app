@@ -84,12 +84,14 @@ class MainActivity : AppCompatActivity() {
 
 > **📝 Important Note**: QA Snap SDK menggunakan **unified recording approach**. Ketika Anda
 > memanggil `startRecording()`, SDK secara otomatis akan memulai screen recording DAN log capture
-> bersamaan. Ini memberikan dokumentasi QA yang comprehensive tanpa perlu memanggil multiple methods.
+> bersamaan. **Satu kontrol untuk kedua output** - tidak perlu mengontrol video dan logs secara
+> terpisah.
 
 ### Default Behavior - Unified Recording
+
 QA Snap SDK dirancang dengan **unified recording** sebagai default behavior. Setiap kali Anda
-memulai screen recording, log capture akan otomatis dimulai bersamaan untuk memberikan dokumentasi
-QA yang comprehensive.
+memulai screen recording, log capture akan otomatis dimulai bersamaan. **Satu tombol kontrol
+mengatur kedua operasi sekaligus**.
 
 #### Mulai Recording (Video + Logs)
 ```kotlin
@@ -108,6 +110,13 @@ qaSnapRecorder.stopRecording()
 val isRecording = qaSnapRecorder.isRecording()
 val isCapturingLogs = qaSnapRecorder.isCapturingLogs()
 ```
+
+### UI Experience - Single Control
+
+- **Satu Notification** - Hanya satu notification bar untuk mengontrol kedua operasi
+- **Satu Tombol Stop** - UI hanya menampilkan satu tombol stop yang mengatur video + logs
+- **Status Terpadu** - Status display menunjukkan kondisi recording secara unified
+- **Dialog Terpadu** - Confirmation dialog mencerminkan operasi yang sedang aktif
 
 ### Advanced Control - Individual Operations
 

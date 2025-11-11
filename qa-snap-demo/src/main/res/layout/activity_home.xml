@@ -38,21 +38,8 @@
             android:id="@+id/btnStopRecording"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="Stop Recording &amp; Logs"
-            android:layout_marginBottom="8dp" />
-
-        <Button
-            android:id="@+id/btnStopLogCapture"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="Stop Recording &amp; Logs"
-            android:layout_marginBottom="8dp" />
-
-        <Button
-            android:id="@+id/btnStopBoth"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:text="Stop Recording &amp; Logs"
+            android:text="🛑 Stop Recording"
+            android:textSize="16sp"
             android:layout_marginBottom="24dp" />
 
         <!-- Log Testing Section -->
