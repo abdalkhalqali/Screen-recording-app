@@ -6,6 +6,7 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +33,8 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
          */
         fun initialize(activity: AppCompatActivity): QASnapRecorder {
             instance = QASnapRecorder(activity)
+            // Setup crash handler when initializing
+            setupCrashHandler(activity)
             return instance!!
         }
 
@@ -40,6 +43,41 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
          * @return QASnapRecorder instance or null if not initialized
          */
         fun getInstance(): QASnapRecorder? = instance
+
+        /**
+         * Emergency stop recording - can be called from anywhere
+         * Useful for handling crashes and force closes
+         */
+        fun emergencyStopRecording(context: Context) {
+            val stopIntent = Intent(context, ScreenRecordingService::class.java).apply {
+                action = ScreenRecordingService.ACTION_EMERGENCY_STOP
+            }
+            try {
+                context.stopService(stopIntent)
+                Log.d("QASnapRecorder", "Emergency stop recording triggered")
+            } catch (e: Exception) {
+                Log.e("QASnapRecorder", "Failed to emergency stop recording", e)
+            }
+        }
+
+        /**
+         * Setup global crash handler to stop recording on app crash
+         */
+        private fun setupCrashHandler(context: Context) {
+            val originalHandler = Thread.getDefaultUncaughtExceptionHandler()
+
+            Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
+                Log.e("QASnapRecorder", "App crashed, stopping recording", exception)
+                try {
+                    emergencyStopRecording(context)
+                } catch (e: Exception) {
+                    Log.e("QASnapRecorder", "Failed to stop recording on crash", e)
+                }
+
+                // Call original handler to maintain crash behavior
+                originalHandler?.uncaughtException(thread, exception)
+            }
+        }
     }
 
     private val mediaProjectionManager =

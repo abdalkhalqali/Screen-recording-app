@@ -2,8 +2,10 @@ package io.codingskuy.qa_snap.service
 
 import android.app.*
 import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
@@ -32,6 +34,7 @@ class ScreenRecordingService : Service() {
     companion object {
         const val ACTION_START_RECORDING = "io.codingskuy.qa_snap.START_RECORDING"
         const val ACTION_STOP_RECORDING = "io.codingskuy.qa_snap.STOP_RECORDING"
+        const val ACTION_EMERGENCY_STOP = "io.codingskuy.qa_snap.EMERGENCY_STOP"
         const val EXTRA_RESULT_DATA = "result_data"
         const val EXTRA_WIDTH = "width"
         const val EXTRA_HEIGHT = "height"
@@ -40,6 +43,28 @@ class ScreenRecordingService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "qa_snap_recording_channel"
         private const val TAG = "ScreenRecordingService"
+
+        // Watchdog timer for automatic stop if no heartbeat
+        private const val WATCHDOG_TIMEOUT = 30000L // 30 seconds
+    }
+
+    // Emergency STOP broadcast receiver to stop recording from outside
+    class EmergencyStopReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent?) {
+            if (intent?.action == ScreenRecordingService.ACTION_EMERGENCY_STOP) {
+                val stopIntent = Intent(context, ScreenRecordingService::class.java)
+                stopIntent.action = ScreenRecordingService.ACTION_STOP_RECORDING
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(stopIntent)
+                } else {
+                    context.startService(stopIntent)
+                }
+                Log.d(
+                    "EmergencyStopReceiver",
+                    "Emergency STOP broadcast received and recording stopped"
+                )
+            }
+        }
     }
 
     private var mediaProjection: MediaProjection? = null
@@ -51,6 +76,12 @@ class ScreenRecordingService : Service() {
     private var recordingStartTime: Long = 0
     private var notificationUpdateHandler: Handler? = null
     private var notificationUpdateRunnable: Runnable? = null
+
+    // Crash and lifecycle detection
+    private var watchdogHandler: Handler? = null
+    private var watchdogRunnable: Runnable? = null
+    private var lastHeartbeat: Long = 0
+    private var emergencyStopReceiver: EmergencyStopReceiver? = null
 
     private val mediaProjectionManager by lazy {
         getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -85,6 +116,22 @@ class ScreenRecordingService : Service() {
                 }
             }
         }
+
+        // Initialize watchdog for crash detection
+        watchdogHandler = Handler(Looper.getMainLooper())
+        watchdogRunnable = object : Runnable {
+            override fun run() {
+                if (isRecording && System.currentTimeMillis() - lastHeartbeat > WATCHDOG_TIMEOUT) {
+                    Log.w(TAG, "Watchdog timeout, stopping recording due to inactivity")
+                    emergencyStopRecording()
+                } else if (isRecording) {
+                    watchdogHandler?.postDelayed(this, WATCHDOG_TIMEOUT)
+                }
+            }
+        }
+
+        // Initialize emergency stop receiver (will be used statically)
+        emergencyStopReceiver = EmergencyStopReceiver()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -113,6 +160,11 @@ class ScreenRecordingService : Service() {
 
             ACTION_STOP_RECORDING -> {
                 Log.d(TAG, "Stop recording action received")
+                stopRecording()
+            }
+
+            ACTION_EMERGENCY_STOP -> {
+                Log.d(TAG, "Emergency stop action received")
                 stopRecording()
             }
         }
@@ -234,6 +286,11 @@ class ScreenRecordingService : Service() {
             }
             Log.d(TAG, "Screen recording started successfully, notification should be visible")
 
+            // Start watchdog
+            lastHeartbeat = System.currentTimeMillis()
+            watchdogRunnable?.let { runnable ->
+                watchdogHandler?.postDelayed(runnable, WATCHDOG_TIMEOUT)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error starting recording", e)
             // Clean up if recording failed to start
@@ -497,6 +554,9 @@ class ScreenRecordingService : Service() {
         val seconds = (elapsedTime % 60000) / 1000
         val formattedTime = String.format("%02d:%02d", minutes, seconds)
 
+        // Update heartbeat to prevent watchdog timeout
+        lastHeartbeat = System.currentTimeMillis()
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("🔴 Screen Recording Active")
             .setContentText("Recording your screen... ($formattedTime)")
@@ -550,13 +610,64 @@ class ScreenRecordingService : Service() {
         }, 2000)
     }
 
+    private fun emergencyStopRecording() {
+        Log.w(TAG, "Emergency stop recording due to watchdog timeout")
+        stopRecording()
+    }
+
     override fun onDestroy() {
         Log.d(TAG, "Service onDestroy called")
+
+        // Stop watchdog
+        watchdogRunnable?.let { runnable ->
+            watchdogHandler?.removeCallbacks(runnable)
+        }
+
+        // Stop notification updates
+        notificationUpdateRunnable?.let { runnable ->
+            notificationUpdateHandler?.removeCallbacks(runnable)
+        }
+
+        // Clean up handlers
+        watchdogHandler = null
+        notificationUpdateHandler = null
+
         if (isRecording) {
-            stopRecording()
+            Log.w(TAG, "Service destroyed while recording, performing emergency stop")
+            emergencyStopRecording()
         } else {
             Log.d(TAG, "Service destroyed, no recording in progress")
         }
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        Log.w(TAG, "Task removed - app was swiped away or force closed")
+        if (isRecording) {
+            Log.w(TAG, "Recording was active when task removed, performing emergency stop")
+            emergencyStopRecording()
+        }
+        super.onTaskRemoved(rootIntent)
+    }
+
+    override fun onLowMemory() {
+        Log.w(TAG, "Low memory warning received")
+        if (isRecording) {
+            Log.w(
+                TAG,
+                "Low memory during recording, performing emergency stop to preserve resources"
+            )
+            emergencyStopRecording()
+        }
+        super.onLowMemory()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        Log.w(TAG, "Memory trim requested with level: $level")
+        if (isRecording && level >= TRIM_MEMORY_RUNNING_CRITICAL) {
+            Log.w(TAG, "Critical memory pressure during recording, performing emergency stop")
+            emergencyStopRecording()
+        }
+        super.onTrimMemory(level)
     }
 }

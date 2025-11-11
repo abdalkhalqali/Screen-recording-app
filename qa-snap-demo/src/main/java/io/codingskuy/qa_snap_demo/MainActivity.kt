@@ -12,6 +12,9 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import io.codingskuy.qa_snap.QASnapRecorder
 import java.io.File
 
@@ -25,9 +28,31 @@ class MainActivity : AppCompatActivity() {
     private var isRecordingStarted = false
     private var arePermissionsGranted = false
 
+    // Application lifecycle observer to handle force close
+    private val appLifecycleObserver = object : DefaultLifecycleObserver {
+        override fun onStop(owner: LifecycleOwner) {
+            super.onStop(owner)
+            Log.d("MainActivity", "App went to background or was force closed")
+            // Emergency stop recording if app is force closed or goes to background
+            if (isRecordingStarted) {
+                QASnapRecorder.emergencyStopRecording(this@MainActivity)
+            }
+        }
+
+        override fun onDestroy(owner: LifecycleOwner) {
+            super.onDestroy(owner)
+            Log.d("MainActivity", "App process is being destroyed")
+            // Final emergency stop
+            QASnapRecorder.emergencyStopRecording(this@MainActivity)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Register app lifecycle observer
+        ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
 
         // Initialize QA Snap SDK
         qaSnapRecorder = QASnapRecorder.initialize(this)
@@ -186,6 +211,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Unregister app lifecycle observer
+        ProcessLifecycleOwner.get().lifecycle.removeObserver(appLifecycleObserver)
         // Keep recording running when switching activities
     }
 }
