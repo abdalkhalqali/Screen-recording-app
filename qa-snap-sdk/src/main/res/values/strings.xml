@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="qa_snap_notification_title">QA Snap Recording</string>
+    <string name="qa_snap_notification_content">Screen recording in progress...</string>
+    <string name="qa_snap_notification_stop">Stop</string>
+    <string name="qa_snap_permission_denied">Media projection permission denied</string>
+    <string name="qa_snap_recording_in_progress">Recording is already in progress</string>
+    <string name="qa_snap_no_recording">No recording in progress</string>
+</resources>

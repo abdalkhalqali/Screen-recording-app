@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "MediaProjectionSample"
 include ':app'
+include ':qa-snap-sdk'
+include ':qa-snap-demo'
