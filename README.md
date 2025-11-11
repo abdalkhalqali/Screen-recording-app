@@ -38,14 +38,52 @@ dependencies {
 <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 ```
 
-### 3. Setup SDK di Application atau Activity
+## Simplified Integration Methods
+
+Untuk memudahkan integrasi, QA Snap SDK menawarkan beberapa metode sederhana untuk memulai screen
+recording dan log capture.
+
+### Method 1: One-Line Integration (Easiest!)
 
 ```kotlin
 class MainActivity : AppCompatActivity() {
-    private lateinit var qaSnapRecorder: QASnapRecorder
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        
+        // ONE LINE - AUTO START RECORDING!
+        QASnap.start(this)
+    }
+}
+```
+
+### Method 2: Extend QASnapActivity (Zero Setup!)
+
+```kotlin
+class MainActivity : QASnapActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        
+        // ZERO LINES OF CODE!
+        // Recording starts automatically
+    }
+    
+    // Optional: Handle completion  
+    override fun onQARecordingComplete(videoFile: File?, logFile: File?) {
+        Toast.makeText(this, "QA files saved!", Toast.LENGTH_SHORT).show()
+    }
+}
+```
+
+### Method 3: Manual Setup (Full Control)
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
         
         // Initialize SDK
         qaSnapRecorder = QASnapRecorder.initialize(this)
@@ -79,6 +117,9 @@ class MainActivity : AppCompatActivity() {
     }
 }
 ```
+
+> **💡 Recommendation**: Use Method 1 or 2 for 90% of use cases. Only use Method 3 if you need
+> advanced customization.
 
 ## Penggunaan
 
