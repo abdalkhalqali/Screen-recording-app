@@ -1,3 +1,25 @@
 <resources>
-    <string name="app_name">MediaProjectionSample</string>
+    <string name="app_name">Screen Recorder</string>
+    <string name="start_preview">Start Preview</string>
+    <string name="stop_preview">Stop Preview</string>
+    <string name="start_recording">Start Recording</string>
+    <string name="stop_recording">Stop Recording</string>
+    <string name="refresh">Refresh</string>
+    <string name="recorded_videos">Recorded Videos</string>
+    <string name="play">Play</string>
+    <string name="share">Share</string>
+    <string name="recording_status">Recording: %s</string>
+    <string name="video_size">Size: %s</string>
+    <string name="video_date">Date: %s</string>
+    <string name="no_video_player">No video player found</string>
+    <string name="error_opening_video">Error opening video: %s</string>
+    <string name="error_sharing_video">Error sharing video: %s</string>
+    <string name="share_video">Share Video</string>
+    <string name="recording_saved">Recording saved successfully!</string>
+    <string name="recording_error">Recording error: %s</string>
+    <string name="permissions_required">Permissions are required for recording</string>
+    <string name="permission_denied">Screen sharing permission denied</string>
+    <string name="unable_start_recording">Unable to start screen recording</string>
+    <string name="unable_start_recording_device">Unable to start screen recording on this device</string>
+    <string name="no_videos_found">No videos found. Start recording to see videos here.</string>
 </resources>
