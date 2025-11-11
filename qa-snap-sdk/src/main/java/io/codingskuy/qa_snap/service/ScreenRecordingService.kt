@@ -48,6 +48,9 @@ class ScreenRecordingService : Service() {
     private var outputFile: File? = null
     private var isRecording = false
     private var mediaProjectionCallback: MediaProjection.Callback? = null
+    private var recordingStartTime: Long = 0
+    private var notificationUpdateHandler: Handler? = null
+    private var notificationUpdateRunnable: Runnable? = null
 
     private val mediaProjectionManager by lazy {
         getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -55,10 +58,38 @@ class ScreenRecordingService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.d(TAG, "ScreenRecordingService onCreate()")
         createNotificationChannel()
+
+        // Verify notification channel was created
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = notificationManager.getNotificationChannel(CHANNEL_ID)
+            if (channel != null) {
+                Log.d(
+                    TAG,
+                    "Notification channel verified: ${channel.name}, importance: ${channel.importance}"
+                )
+            } else {
+                Log.e(TAG, "Failed to create notification channel!")
+            }
+        }
+
+        notificationUpdateHandler = Handler(Looper.getMainLooper())
+        notificationUpdateRunnable = object : Runnable {
+            override fun run() {
+                updateNotification()
+                if (isRecording) {
+                    notificationUpdateHandler?.postDelayed(this, 1000)
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.d(TAG, "onStartCommand called with action: ${intent?.action}")
+
         when (intent?.action) {
             ACTION_START_RECORDING -> {
                 val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
@@ -74,10 +105,14 @@ class ScreenRecordingService : Service() {
                     densityDpi = 420 // Common default density
                 }
 
+                // Test notification first
+                showTestNotification()
+
                 resultData?.let { startRecording(it, width, height, densityDpi) }
             }
 
             ACTION_STOP_RECORDING -> {
+                Log.d(TAG, "Stop recording action received")
                 stopRecording()
             }
         }
@@ -91,14 +126,20 @@ class ScreenRecordingService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "QA Snap Recording",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Screen recording in progress"
-                setShowBadge(false)
+                description = "Screen recording controls and status"
+                setShowBadge(true)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableVibration(false)
+                enableLights(false)
+                setSound(null, null) // No sound for recording notifications
             }
 
-            val notificationManager = getSystemService(NotificationManager::class.java)
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+            Log.d(TAG, "Notification channel created with IMPORTANCE_DEFAULT")
         }
     }
 
@@ -111,16 +152,43 @@ class ScreenRecordingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Create a main app intent for when user taps the notification
+        val mainActivityIntent = Intent().apply {
+            setClassName(packageName, "io.codingskuy.qa_snap_demo.HomeActivity")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val mainPendingIntent = PendingIntent.getActivity(
+            this, 1, mainActivityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("QA Snap Recording")
-            .setContentText("Screen recording in progress...")
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle("🔴 Screen Recording Active")
+            .setContentText("Recording your screen...")
+            .setSubText("QA Snap Demo")
+            .setSmallIcon(android.R.drawable.ic_media_play) // Recording icon
             .setOngoing(true)
-            .addAction(
-                android.R.drawable.ic_media_pause,
-                "Stop",
-                stopPendingIntent
+            .setAutoCancel(false)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT) // Changed from LOW
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setShowWhen(true)
+            .setUsesChronometer(true) // Shows elapsed time automatically
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("Screen recording is in progress. Tap STOP to end recording.")
             )
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_media_pause,
+                    "STOP",
+                    stopPendingIntent
+                )
+                    .setShowsUserInterface(false)
+                    .build()
+            )
+            .setContentIntent(mainPendingIntent) // Tap notification to open app
+            .setDeleteIntent(null) // Prevent accidental dismissal
             .build()
     }
 
@@ -128,9 +196,10 @@ class ScreenRecordingService : Service() {
         try {
             Log.d(TAG, "Starting screen recording...")
 
-            // Start foreground service
-            startForeground(NOTIFICATION_ID, createNotification())
-            Log.d(TAG, "Foreground service started")
+            // Start foreground service FIRST to show notification immediately
+            val notification = createNotification()
+            startForeground(NOTIFICATION_ID, notification)
+            Log.d(TAG, "Foreground service started with notification ID: $NOTIFICATION_ID")
 
             // Initialize MediaProjection
             mediaProjection = mediaProjectionManager.getMediaProjection(
@@ -159,7 +228,11 @@ class ScreenRecordingService : Service() {
             // Start recording
             mediaRecorder?.start()
             isRecording = true
-            Log.d(TAG, "Screen recording started successfully")
+            recordingStartTime = System.currentTimeMillis()
+            notificationUpdateRunnable?.let { runnable ->
+                notificationUpdateHandler?.post(runnable)
+            }
+            Log.d(TAG, "Screen recording started successfully, notification should be visible")
 
         } catch (e: Exception) {
             Log.e(TAG, "Error starting recording", e)
@@ -334,7 +407,16 @@ class ScreenRecordingService : Service() {
 
             if (isRecording) {
                 isRecording = false
+
+                // Stop notification updates
+                notificationUpdateRunnable?.let { runnable ->
+                    notificationUpdateHandler?.removeCallbacks(runnable)
+                }
+
                 Log.d(TAG, "Screen recording stopped")
+
+                // Show completion notification
+                showRecordingCompletedNotification()
 
                 // Notify SDK about recording result
                 outputFile?.let { file ->
@@ -362,9 +444,110 @@ class ScreenRecordingService : Service() {
             QASnapRecorder.getInstance()
                 ?.notifyRecordingError("Error stopping recording: ${e.message}")
         } finally {
-            stopForeground(true)
-            stopSelf()
+            // Remove the ongoing notification after a delay to show completion
+            Handler(Looper.getMainLooper()).postDelayed({
+                stopForeground(true)
+                stopSelf()
+            }, 3000) // Show completion notification for 3 seconds
         }
+    }
+
+    private fun showRecordingCompletedNotification() {
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val completedNotification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("QA Snap Recording Completed")
+            .setContentText("Screen recording has been saved successfully")
+            .setSubText("Recording finished")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build()
+
+        notificationManager.notify(NOTIFICATION_ID, completedNotification)
+    }
+
+    private fun updateNotification() {
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val stopIntent = Intent(this, ScreenRecordingService::class.java).apply {
+            action = ACTION_STOP_RECORDING
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this, 0, stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Create a main app intent for when user taps the notification
+        val mainActivityIntent = Intent().apply {
+            setClassName(packageName, "io.codingskuy.qa_snap_demo.HomeActivity")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val mainPendingIntent = PendingIntent.getActivity(
+            this, 1, mainActivityIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val elapsedTime = System.currentTimeMillis() - recordingStartTime
+        val minutes = elapsedTime / 60000
+        val seconds = (elapsedTime % 60000) / 1000
+        val formattedTime = String.format("%02d:%02d", minutes, seconds)
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("🔴 Screen Recording Active")
+            .setContentText("Recording your screen... ($formattedTime)")
+            .setSubText("QA Snap Demo")
+            .setSmallIcon(android.R.drawable.ic_media_play) // Recording icon
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT) // Changed from LOW
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setShowWhen(true)
+            .setUsesChronometer(true) // Shows elapsed time automatically
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText("Screen recording is in progress. Tap STOP to end recording.")
+            )
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    android.R.drawable.ic_media_pause,
+                    "STOP",
+                    stopPendingIntent
+                )
+                    .setShowsUserInterface(false)
+                    .build()
+            )
+            .setContentIntent(mainPendingIntent) // Tap notification to open app
+            .setDeleteIntent(null) // Prevent accidental dismissal
+            .build()
+
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun showTestNotification() {
+        Log.d(TAG, "Showing test notification to verify notification system")
+        val testNotification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("QA Snap Test")
+            .setContentText("Testing notification system...")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(999, testNotification)
+
+        // Remove test notification after 2 seconds
+        Handler(Looper.getMainLooper()).postDelayed({
+            notificationManager.cancel(999)
+            Log.d(TAG, "Test notification removed")
+        }, 2000)
     }
 
     override fun onDestroy() {

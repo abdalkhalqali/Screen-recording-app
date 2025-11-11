@@ -96,6 +96,19 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
     }
 
     /**
+     * Stop screen recording from external Activity context
+     *
+     * Can be called from other activities (not the one used for initialize).
+     * @param context Activity context from requester (external)
+     */
+    fun stopRecordingExternally(context: Context) {
+        val stopIntent = Intent(context, ScreenRecordingService::class.java).apply {
+            action = ScreenRecordingService.ACTION_STOP_RECORDING
+        }
+        context.stopService(stopIntent)
+    }
+
+    /**
      * Check if currently recording
      * @return true if recording, false otherwise
      */

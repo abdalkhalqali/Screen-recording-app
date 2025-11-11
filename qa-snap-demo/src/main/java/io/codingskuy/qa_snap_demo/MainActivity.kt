@@ -64,6 +64,11 @@ class MainActivity : AppCompatActivity() {
         // Audio recording permission
         permissions.add(Manifest.permission.RECORD_AUDIO)
 
+        // Notification permission for Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
         // Storage permissions based on Android version
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.READ_MEDIA_VIDEO)
