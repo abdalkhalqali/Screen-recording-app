@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -32,20 +33,29 @@ class MainActivity : AppCompatActivity() {
         qaSnapRecorder = QASnapRecorder.initialize(this)
         setupRecordingListener()
 
-        // Check and request permissions first
+        Log.d("MainActivity", "Checking permissions...")
+        // Check permissions first, don't start recording yet
         if (checkPermissions()) {
             arePermissionsGranted = true
+            Log.d("MainActivity", "All permissions already granted, starting recording")
+            Toast.makeText(this, "Starting recording...", Toast.LENGTH_SHORT).show()
+            // All permissions already granted, start recording
             startRecording()
         } else {
+            Log.d("MainActivity", "Permissions not granted, requesting permissions")
+            Toast.makeText(this, "Requesting permissions...", Toast.LENGTH_SHORT).show()
+            // Request permissions first, recording will start in onRequestPermissionsResult
             requestPermissions()
         }
     }
 
     private fun checkPermissions(): Boolean {
         val permissions = getRequiredPermissions()
-        return permissions.all { permission ->
+        val granted = permissions.all { permission ->
             ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
         }
+        Log.d("MainActivity", "Permission check result: $granted")
+        return granted
     }
 
     private fun getRequiredPermissions(): List<String> {
@@ -79,13 +89,27 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
+        Log.d("MainActivity", "Permission result received for request code: $requestCode")
+
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            Log.d("MainActivity", "All permissions granted: $allGranted")
+
+            if (allGranted) {
+                arePermissionsGranted = true
+                Toast.makeText(
+                    this,
+                    "Permissions granted, starting recording...",
+                    Toast.LENGTH_SHORT
+                ).show()
+                Log.d("MainActivity", "Starting recording after permission grant")
                 startRecording()
             } else {
+                Log.w("MainActivity", "Some permissions were denied")
                 Toast.makeText(this, "Permissions required for recording", Toast.LENGTH_LONG).show()
                 // Navigate anyway after showing error
                 Handler(Looper.getMainLooper()).postDelayed({
+                    Log.d("MainActivity", "Navigating to SignIn after permission denial")
                     navigateToSignIn()
                 }, 2000)
             }
@@ -126,8 +150,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startRecording() {
-        if (arePermissionsGranted) {
+        if (!arePermissionsGranted) {
+            Log.w("MainActivity", "Attempting to start recording without permissions")
+            Toast.makeText(this, "Permissions not granted", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        if (checkPermissions()) {
             qaSnapRecorder.startRecording()
+        } else {
+            Log.w("MainActivity", "Permissions check failed in startRecording")
+            Toast.makeText(this, "Missing permissions", Toast.LENGTH_SHORT).show()
         }
     }
 
