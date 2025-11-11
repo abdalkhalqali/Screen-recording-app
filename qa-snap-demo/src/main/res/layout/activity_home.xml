@@ -25,13 +25,89 @@
             android:textSize="16sp"
             android:layout_marginBottom="16dp" />
 
+        <!-- Recording Controls -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Recording Controls"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp" />
+
         <Button
             android:id="@+id/btnStopRecording"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:text="@string/stop_recording"
-            android:layout_marginBottom="32dp" />
+            android:text="Stop Recording &amp; Logs"
+            android:layout_marginBottom="8dp" />
 
+        <Button
+            android:id="@+id/btnStopLogCapture"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Stop Recording &amp; Logs"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btnStopBoth"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Stop Recording &amp; Logs"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Log Testing Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Log Testing"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <Button
+                android:id="@+id/btnLogTest1"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="Debug Log"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnLogTest2"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                android:text="Info Log"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/btnLogTest3"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="Warn Log"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnLogError"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Generate Error Log"
+            android:layout_marginBottom="24dp" />
+
+        <!-- User Activities Section -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -44,7 +120,7 @@
             android:id="@+id/btnActivity1"
             android:layout_width="match_parent"
             android:layout_height="48dp"
-            android:text="@string/activity_1"
+            android:text="🐞 Debug File System"
             android:layout_marginBottom="8dp" />
 
         <Button

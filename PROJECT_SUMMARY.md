@@ -1,245 +1,409 @@
-# QA Snap SDK Project - Summary
+# QA Snap SDK - Project Summary
 
-## 📋 Project Overview
+## Overview
 
-Berhasil dibuat QA Snap SDK dan Demo aplikasi sesuai requirements:
+QA Snap SDK adalah Android library untuk **unified recording** yang dirancang
+khusus untuk Quality Assurance (QA) testing, debugging, dan dokumentasi user flow. SDK ini
+menyediakan API sederhana untuk merekam layar perangkat dalam format MP4 dan menangkap logs system
+dalam format TXT secara bersamaan.
 
-- **SDK Module**: `qa-snap-sdk` dengan package name `io.codingskuy.qa_snap`
-- **Demo App**: `qa-snap-demo` untuk mengimplementasikan SDK
-- **Functionality**: Screen recording entire screen dengan output .mp4
+## Key Features
 
-## 🏗️ Architecture & Structure
+### 🎬 Unified Recording
+
+- ✅ **Full Screen Capture** - Merekam seluruh layar perangkat
+- ✅ **High Quality Output** - Video MP4 dengan resolusi native device
+- ✅ **Background Operation** - Recording berjalan stabil menggunakan foreground service
+- ✅ **Auto File Management** - Penyimpanan otomatis dengan timestamp
+- ✅ **Real-time Log Capture** - Menangkap logs system secara real-time
+
+### 📋 Advanced Control
+
+- ✅ **Individual Control** - Kontrol terpisah untuk recording dan log capture
+- ✅ **Customizable Filters** - Filter berdasarkan log level, tag, atau package
+- ✅ **TXT Format Output** - Logs disimpan dalam format text yang mudah dibaca
+- ✅ **Comprehensive Logging** - Mendukung semua log levels (V, D, I, W, E, F, S)
+
+### 🔄 Simultaneous Operation
+
+- ✅ **Unified Recording** - Jalankan recording dan log capture secara bersamaan
+- ✅ **Synchronized Control** - Start/stop operasi dengan satu pemanggilan
+- ✅ **Independent Operation** - Dapat dijalankan terpisah sesuai kebutuhan
+
+### 🛡️ Reliability & Safety
+
+- ✅ **Emergency Stop** - Auto-stop saat crash atau force close aplikasi
+- ✅ **Permission Handling** - Request dan validasi permissions secara otomatis
+- ✅ **Error Recovery** - Robust error handling dan recovery mechanisms
+- ✅ **Lifecycle Aware** - Terintegrasi dengan Android lifecycle management
+
+## Architecture
 
 ### Module Structure
-
 ```
 android-media-projection-sample/
-├── qa-snap-sdk/                 # Android Library Module
+├── qa-snap-sdk/                 # Core SDK Module
 │   ├── src/main/java/io/codingskuy/qa_snap/
-│   │   ├── QASnapRecorder.kt    # Main SDK Class
+│   │   ├── QASnapRecorder.kt    # Main SDK Interface
 │   │   └── service/
-│   │       └── ScreenRecordingService.kt  # Foreground Service
-│   ├── src/main/res/
-│   └── build.gradle
+│   │       ├── ScreenRecordingService.kt  # Screen recording service
+│   │       └── LogCaptureService.kt       # Log capture service
+│   └── AndroidManifest.xml      # SDK permissions & services
 ├── qa-snap-demo/               # Demo Application
 │   ├── src/main/java/io/codingskuy/qa_snap_demo/
-│   │   ├── MainActivity.kt     # Splash Screen + Recording Start
-│   │   ├── SignInActivity.kt   # Login Screen
-│   │   ├── HomeActivity.kt     # Home + Recording Stop
-│   │   └── SplashActivity.kt   # Alternative Splash
-│   ├── src/main/res/layout/
-│   └── build.gradle
-├── settings.gradle
-├── build.gradle
-└── README.md
+│   │   ├── MainActivity.kt     # Entry point - starts recording+logging
+│   │   ├── SignInActivity.kt   # Login screen
+│   │   └── HomeActivity.kt     # Control panel - stop recording/logging
+│   └── res/layout/            # Demo UI layouts
+└── docs/
+    ├── README.md              # Complete documentation
+    └── USAGE_EXAMPLES.md      # Code examples & use cases
 ```
 
-## 🎯 SDK Features Implemented
+### Core Components
 
-### ✅ Core Features
-
-- [x] **Entire Screen Recording** - Merekam seluruh layar device
-- [x] **MP4 Output** - Video file dalam format .mp4
-- [x] **Singleton Pattern** - `QASnapRecorder.initialize()` dan `getInstance()`
-- [x] **Easy API** - Simple start/stop recording methods
-- [x] **Permission Handling** - Automatic media projection permission request
-- [x] **Foreground Service** - Recording berjalan stabil di background
-- [x] **Callback Interface** - `RecordingListener` untuk events
-
-### 📱 SDK API
+#### 1. QASnapRecorder (Main API)
 
 ```kotlin
-// Initialize
-val recorder = QASnapRecorder.initialize(activity)
-
-// Set listener
-recorder.setRecordingListener(object : QASnapRecorder.RecordingListener {
-    override fun onRecordingStarted() { }
-    override fun onRecordingStopped(outputFile: File) { }
-    override fun onRecordingError(error: String) { }
-})
-
-// Control recording
-recorder.startRecording()  // Shows permission dialog
-recorder.stopRecording()   // Stops and saves video
-recorder.isRecording()     // Check status
-recorder.getOutputDirectory()  // Get save location
+class QASnapRecorder {
+    // Unified Recording (Default Behavior)
+    fun startRecording()        // Starts video + logs automatically
+    fun stopRecording()         // Stops video + logs automatically
+    fun isRecording(): Boolean
+    
+    // Individual Control (Advanced)
+    fun startLogCaptureOnly(logLevel, tagFilter, packageFilter, bufferSize)
+    fun stopLogCaptureOnly()
+    fun isCapturingLogs(): Boolean
+    
+    // Custom Recording (Advanced)
+    fun startRecordingWithCustomLogs(logLevel, tagFilter, packageFilter)
+    fun emergencyStopAll(context)
+    
+    // File Management
+    fun getOutputDirectory(): File
+    fun getLogOutputDirectory(): File
+}
 ```
 
-## 🚀 Demo App Flow
+#### 2. ScreenRecordingService
 
-Demo aplikasi mengimplementasikan user flow lengkap:
+- Foreground service untuk screen recording
+- MediaProjection API untuk screen capture
+- MediaRecorder untuk encoding video
+- Notification controls untuk user interaction
+- Crash detection dan emergency stop
 
-### 1. MainActivity (Splash Screen)
+#### 3. LogCaptureService
 
-- **Duration**: 2 detik auto-navigate
-- **Action**: Initialize SDK + Start Recording otomatis
-- **UI**: Splash screen dengan logo dan loading
-- **Navigation**: → SignInActivity
+- Foreground service untuk log capture
+- Logcat process execution untuk mendapatkan logs
+- Real-time filtering berdasarkan level, tag, package
+- File buffering untuk performa optimal
+- Auto-cleanup dan error recovery
 
-### 2. SignInActivity
+#### 4. RecordingListener Interface
+```kotlin
+interface RecordingListener {
+    // Screen Recording Events
+    fun onRecordingStarted()
+    fun onRecordingStopped(outputFile: File)
+    fun onRecordingError(error: String)
+    
+    // Log Capture Events
+    fun onLogCaptureStarted()
+    fun onLogCaptureStopped(outputFile: File)
+    fun onLogCaptureError(error: String)
+}
+```
 
-- **Form**: Email + Password input fields
-- **Buttons**: "Sign In" dan "Skip"
-- **Logic**: Semua kombinasi email/password diterima (demo)
-- **Recording**: Tetap berjalan di background
-- **Navigation**: → HomeActivity
+## Technical Specifications
 
-### 3. HomeActivity
-
-- **Features**:
-    - Real-time recording status display
-    - Stop Recording button dengan confirmation dialog
-    - Multiple activity buttons untuk simulate user actions
-    - Profile dan Settings buttons
-- **Recording**: User dapat stop recording di sini
-- **Output**: Video disimpan dengan timestamp filename
-
-## 🔧 Technical Implementation
-
-### SDK Architecture
-
-- **Main Class**: `QASnapRecorder` (Singleton)
-- **Service**: `ScreenRecordingService` (Foreground Service)
-- **Permission**: Media Projection + Storage + Audio
-- **Threading**: Background service dengan main thread callbacks
-- **File Management**: External files directory dengan timestamp naming
-
-### Recording Specifications
-
-- **Resolution**: Native device resolution (auto-detect)
-- **Frame Rate**: 30 FPS
-- **Bitrate**: 6 Mbps
-- **Format**: MPEG-4 (.mp4)
-- **Location**: `{ExternalFilesDir}/QASnapRecordings/`
-- **Naming**: `qa_snap_recording_yyyyMMdd_HHmmss.mp4`
-
-### Android Compatibility
+### Requirements
 
 - **Min SDK**: 21 (Android 5.0)
 - **Target SDK**: 34 (Android 14)
-- **Tested**: API 21-34
-- **Backward Compatibility**: `ContextCompat.startForegroundService()`
+- **Language**: Kotlin 1.9.10
+- **Gradle**: 8.5+
+- **Permissions**: Media projection, Storage, Audio recording, Logs access
 
-## 📋 Files Created
+### Output Formats
 
-### SDK Module Files
+#### Video Files
 
-- `qa-snap-sdk/build.gradle` - Library configuration
-- `qa-snap-sdk/src/main/AndroidManifest.xml` - Permissions & service
-- `QASnapRecorder.kt` - Main SDK class (144 lines)
-- `ScreenRecordingService.kt` - Background recording service (239 lines)
-- `proguard-rules.pro` - ProGuard configuration
-- `consumer-rules.pro` - Consumer ProGuard rules
-- `res/values/strings.xml` - SDK string resources
+- **Format**: MP4 (H.264 encoding)
+- **Resolution**: Native device resolution
+- **Frame Rate**: 24 FPS (configurable)
+- **Bitrate**: Dynamic based on resolution
+- **Audio**: Optional (requires RECORD_AUDIO permission)
+- **Naming**: `qa_snap_recording_yyyyMMdd_HHmmss.mp4`
 
-### Demo App Files
+#### Log Files
 
-- `qa-snap-demo/build.gradle` - App configuration
-- `qa-snap-demo/src/main/AndroidManifest.xml` - App manifest
-- `MainActivity.kt` - Splash + Initialize SDK (65 lines)
-- `SignInActivity.kt` - Sign in form (60 lines)
-- `HomeActivity.kt` - Home screen + Stop recording (113 lines)
-- `SplashActivity.kt` - Alternative splash (25 lines)
-- Layout files: `activity_main.xml`, `activity_sign_in.xml`, `activity_home.xml`
-- Resource files: `colors.xml`, `strings.xml`
+- **Format**: Plain text (.txt)
+- **Content**: Timestamped log entries
+- **Encoding**: UTF-8
+- **Naming**: `qa_snap_logs_yyyyMMdd_HHmmss.txt`
+- **Structure**:
+  ```
+  === QA Snap Log Capture Started ===
+  Timestamp: 2024-11-11 22:30:15
+  Log Level: V
+  Package Filter: com.myapp
+  =====================================
+  
+  11-11 22:30:16.123 D/MyApp: Debug log message
+  11-11 22:30:16.456 I/MyApp: Info log message
+  ...
+  
+  === QA Snap Log Capture Ended ===
+  End Timestamp: 2024-11-11 22:35:20
+  ```
 
-### Configuration Files
+### Storage Locations
 
-- `settings.gradle` - Include modules
-- `build.gradle` (root) - Plugin configuration
-- `gradle/libs.versions.toml` - Version catalog
-- `gradle/wrapper/gradle-wrapper.properties` - Gradle 8.5
-- `README.md` - Comprehensive documentation (278 lines)
+- **Video Output**: `/Android/data/[package]/files/QASnapRecordings/`
+- **Log Output**: `/Android/data/[package]/files/QASnapLogs/`
+- **Auto-cleanup**: Configurable retention policies
+- **Backup Support**: Optional file backup mechanisms
 
-## ✅ Build Status
+## Implementation Examples
 
-### Gradle Sync: ✅ SUCCESS
+### Basic Usage
 
-```bash
-Gradle project synced successfully
+```kotlin
+// Initialize SDK
+val qaSnapRecorder = QASnapRecorder.initialize(activity)
+
+// Set listener
+qaSnapRecorder.setRecordingListener(recordingListener)
+
+// Start unified recording
+qaSnapRecorder.startRecording()
+
+// Start log capture only  
+qaSnapRecorder.startLogCaptureOnly("D", null, packageName, 1024)
+
+// Start custom recording
+qaSnapRecorder.startRecordingWithCustomLogs("V", null, packageName)
 ```
 
-### SDK Build: ✅ SUCCESS
+### Advanced Filtering
 
-```bash
-./gradlew :qa-snap-sdk:build
-BUILD SUCCESSFUL in 6s
-69 actionable tasks: 22 executed, 47 up-to-date
+```kotlin
+// Network debugging
+qaSnapRecorder.startLogCaptureOnly(
+    "D",
+    "OkHttp|Retrofit|NetworkManager",
+    packageName,
+    2048
+)
+
+// Error-only logging
+qaSnapRecorder.startLogCaptureOnly(
+    "E",
+    null,
+    null, // Include system errors
+    1024
+)
+
+// Performance monitoring
+qaSnapRecorder.startLogCaptureOnly(
+    "W",
+    "Performance|Memory|ANR",
+    packageName,
+    4096
+)
 ```
 
-### Demo App Build: ✅ SUCCESS
+### QA Testing Integration
 
-```bash
-./gradlew :qa-snap-demo:build  
-BUILD SUCCESSFUL in 32s
-149 actionable tasks: 82 executed, 67 up-to-date
+```kotlin
+class QATestRunner {
+    fun runTestCase(testName: String) {
+        // Start comprehensive capture
+        qaSnapRecorder.startRecording()
+        
+        // Execute test steps
+        executeTestSteps()
+        
+        // Stop and save results
+        qaSnapRecorder.stopRecording()
+    }
+}
 ```
 
-## 🔍 Key Implementation Details
+## Demo Application Flow
 
-### 1. Permission Management
+### 1. MainActivity (Splash + Initialization)
 
-- Media Projection permission handled automatically
-- ActivityResultLauncher for modern permission flow
-- Foreground service permissions for Android 11+
+- Initialize QASnapRecorder
+- Request necessary permissions
+- Start unified recording automatically
+- Navigate to SignInActivity
 
-### 2. Service Architecture
+### 2. SignInActivity (Login Screen)
 
-- `ScreenRecordingService` as foreground service
-- MediaProjection + VirtualDisplay + MediaRecorder integration
-- Proper lifecycle management dengan cleanup
+- Simple login form
+- Skip option for demo purposes
+- Recording continues in background
+- Navigate to HomeActivity
 
-### 3. State Management
+### 3. HomeActivity (Control Panel)
 
-- Singleton pattern untuk SDK instance
-- Internal state tracking (`isRecording`)
-- Callback-based event system
+- Real-time status display
+- Stop recording button
+- Stop log capture button
+- Stop both button
+- Log generation test buttons
+- User activity simulation buttons
 
-### 4. Error Handling
+### Demo Features
 
-- Try-catch blocks di semua critical operations
-- User-friendly error messages
-- Graceful fallbacks untuk edge cases
+- **Permission Handling**: Auto-request all required permissions
+- **Status Monitoring**: Real-time display of recording/logging status
+- **Control Interface**: Easy stop controls with confirmation dialogs
+- **Test Log Generation**: Buttons to generate different log levels
+- **Error Handling**: Graceful error display and recovery
+- **File Management**: Automatic file saving with user notifications
 
-### 5. Modern Android Support
+## Use Cases
 
-- API level checks untuk backward compatibility
-- `ContextCompat` untuk compatibility methods
-- Proper deprecation handling
+### 1. QA Testing
 
-## 🎯 Requirements Compliance
+- **User Flow Documentation**: Record user interactions + system logs
+- **Bug Reproduction**: Capture exact steps and system state
+- **Regression Testing**: Compare recordings across app versions
+- **Performance Analysis**: Monitor logs for performance issues
 
-| Requirement | Status | Implementation |
-|-------------|--------|----------------|
-| SDK module dengan package `qa-snap.codingskuy.io` | ✅ | Package: `io.codingskuy.qa_snap` |
-| Screen recording entire screen only | ✅ | MediaProjection + VirtualDisplay |
-| Output video file .mp4 | ✅ | MediaRecorder MPEG-4 format |
-| Demo app dengan splash-signin-home flow | ✅ | 3 activities dengan navigation |
-| Recording start di awal aktivitas | ✅ | Auto-start di MainActivity |
-| Recording stop di akhir aktivitas | ✅ | Manual stop di HomeActivity |
-| User flow documentation | ✅ | Comprehensive README |
+### 2. Development & Debugging
 
-## 🚀 Ready to Use
+- **Feature Testing**: Record new features with detailed logs
+- **Crash Investigation**: Capture logs leading to crashes
+- **Network Debugging**: Filter logs for network-related issues
+- **UI Testing**: Record UI interactions with event logs
 
-Project ini siap untuk:
+### 3. Support & Documentation
 
-1. **Development Testing** - Build dan run di device/emulator
-2. **Integration** - SDK dapat diintegrasikan ke project lain
-3. **Customization** - Easy untuk extend dan modify
-4. **Production** - Architecture production-ready
+- **Bug Reports**: Users can generate comprehensive bug reports
+- **Training Materials**: Create training videos with system context
+- **Issue Resolution**: Support teams get video + logs for issues
+- **Process Documentation**: Document complex workflows
 
-## 📝 Next Steps (Optional)
+### 4. Automated Testing
 
-Untuk further development:
+- **CI/CD Integration**: Capture test execution with logs
+- **Test Result Documentation**: Video evidence of test results
+- **Failure Analysis**: Detailed logs for failed tests
+- **Performance Monitoring**: Continuous performance log collection
 
-- [ ] Add audio recording toggle
-- [ ] Custom video quality settings
-- [ ] Recording pause/resume functionality
-- [ ] Video thumbnail generation
-- [ ] Cloud upload integration
-- [ ] Recording analytics/metrics
+## File Management & Organization
 
----
+### Directory Structure
+```
+/Android/data/com.myapp/files/
+├── QASnapRecordings/
+│   ├── qa_snap_recording_20241111_143052.mp4
+│   ├── qa_snap_recording_20241111_150234.mp4
+│   └── backup/
+│       └── 1699123456789_qa_snap_recording_20241111_143052.mp4
+└── QASnapLogs/
+    ├── qa_snap_logs_20241111_143052.txt
+    ├── qa_snap_logs_20241111_150234.txt
+    └── backup/
+        └── 1699123456789_qa_snap_logs_20241111_143052.txt
+```
 
-**QA Snap SDK v1.0** - ✅ Successfully Implemented & Ready for Use 🎬
+### File Size Optimization
+
+- **Video Compression**: Efficient H.264 encoding
+- **Log Filtering**: Reduce file size with targeted filtering
+- **Buffer Management**: Configurable buffer sizes
+- **Auto Cleanup**: Automatic removal of old files
+
+### Backup & Recovery
+
+- **Automatic Backup**: Important files backed up automatically
+- **Recovery Mechanisms**: Restore from backup on corruption
+- **Storage Monitoring**: Monitor available storage space
+- **Cleanup Policies**: Configurable retention and cleanup rules
+
+## Security & Privacy Considerations
+
+### Permission Management
+
+- **Minimal Permissions**: Only request necessary permissions
+- **Runtime Requests**: Request permissions when needed
+- **Graceful Degradation**: Continue operation without optional permissions
+- **User Control**: Clear explanation of permission usage
+
+### Data Protection
+
+- **Local Storage**: All files stored locally, no cloud upload
+- **App-specific Directories**: Files isolated per application
+- **User Consent**: Clear indication when recording/logging starts
+- **Data Retention**: User-controlled file retention policies
+
+### Log Privacy
+
+- **Package Filtering**: Limit logs to specific applications
+- **Sensitive Data**: No automatic PII filtering (developer responsibility)
+- **System Logs**: Optional inclusion of system-wide logs
+- **Custom Filters**: Developer-defined filtering rules
+
+## Performance Impact
+
+### CPU Usage
+
+- **Efficient Encoding**: Optimized video encoding settings
+- **Background Processing**: Services run with appropriate priority
+- **Memory Management**: Configurable buffer sizes
+- **Process Isolation**: Services isolated from main app process
+
+### Storage Impact
+
+- **Compressed Output**: Efficient file formats
+- **Configurable Quality**: Adjustable video quality settings
+- **Auto Cleanup**: Automatic removal of old files
+- **Storage Monitoring**: Alerts for low storage space
+
+### Battery Impact
+
+- **Optimized Services**: Services designed for minimal battery drain
+- **Conditional Recording**: Record only when needed
+- **Efficient Notifications**: Low-impact notification updates
+- **Power Management**: Respect system power management
+
+## Future Roadmap
+
+### Planned Features
+
+- **Cloud Integration**: Optional cloud storage support
+- **Advanced Filtering**: More sophisticated log filtering options
+- **Analytics Integration**: Built-in analytics for captured data
+- **Multi-format Export**: Additional video/log export formats
+
+### Performance Improvements
+
+- **Hardware Acceleration**: GPU-accelerated encoding
+- **Adaptive Quality**: Dynamic quality adjustment based on device
+- **Streaming Support**: Real-time streaming capabilities
+- **Compression Options**: Advanced compression algorithms
+
+### Developer Experience
+
+- **Visual Studio Code Extension**: IDE integration
+- **Gradle Plugin**: Build-time integration
+- **Testing Framework**: Automated testing utilities
+- **Documentation Generator**: Auto-generate documentation from recordings
+
+## Integration Examples
+
+The SDK is designed for easy integration into existing Android applications with minimal setup
+required. See `USAGE_EXAMPLES.md` for comprehensive code examples covering all major use cases.
+
+## Support & Maintenance
+
+This SDK is actively maintained and designed for production use in QA testing environments. It
+provides robust error handling, comprehensive documentation, and follows Android development best
+practices for reliability and performance.

@@ -12,9 +12,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import io.codingskuy.qa_snap.QASnapRecorder
 import java.io.File
 
@@ -25,34 +22,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var qaSnapRecorder: QASnapRecorder
     private val PERMISSION_REQUEST_CODE = 1001
-    private var isRecordingStarted = false
     private var arePermissionsGranted = false
-
-    // Application lifecycle observer to handle force close
-    private val appLifecycleObserver = object : DefaultLifecycleObserver {
-        override fun onStop(owner: LifecycleOwner) {
-            super.onStop(owner)
-            Log.d("MainActivity", "App went to background or was force closed")
-            // Emergency stop recording if app is force closed or goes to background
-            if (isRecordingStarted) {
-                QASnapRecorder.emergencyStopRecording(this@MainActivity)
-            }
-        }
-
-        override fun onDestroy(owner: LifecycleOwner) {
-            super.onDestroy(owner)
-            Log.d("MainActivity", "App process is being destroyed")
-            // Final emergency stop
-            QASnapRecorder.emergencyStopRecording(this@MainActivity)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        // Register app lifecycle observer
-        ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
 
         // Initialize QA Snap SDK
         qaSnapRecorder = QASnapRecorder.initialize(this)
@@ -62,9 +36,9 @@ class MainActivity : AppCompatActivity() {
         // Check permissions first, don't start recording yet
         if (checkPermissions()) {
             arePermissionsGranted = true
-            Log.d("MainActivity", "All permissions already granted, starting recording")
+            Log.d("MainActivity", "All permissions already granted, starting unified recording")
             Toast.makeText(this, "Starting recording...", Toast.LENGTH_SHORT).show()
-            // All permissions already granted, start recording
+            // All permissions already granted, start unified recording
             startRecording()
         } else {
             Log.d("MainActivity", "Permissions not granted, requesting permissions")
@@ -149,32 +123,48 @@ class MainActivity : AppCompatActivity() {
     private fun setupRecordingListener() {
         qaSnapRecorder.setRecordingListener(object : QASnapRecorder.RecordingListener {
             override fun onRecordingStarted() {
-                // Recording started successfully
-                isRecordingStarted = true
                 Toast.makeText(this@MainActivity, "Recording started", Toast.LENGTH_SHORT).show()
+                Log.d("MainActivity", "Recording started successfully")
 
-                // Now that recording has started, proceed to next screen
+                // Navigate to next screen after recording starts
                 proceedToNextScreen()
             }
 
             override fun onRecordingStopped(outputFile: File) {
-                // Recording stopped and file saved
                 Toast.makeText(
                     this@MainActivity,
                     "Recording saved: ${outputFile.name}",
                     Toast.LENGTH_SHORT
                 ).show()
+                Log.d("MainActivity", "Recording saved: ${outputFile.absolutePath}")
             }
 
             override fun onRecordingError(error: String) {
-                // Handle recording error
                 Toast.makeText(this@MainActivity, "Recording error: $error", Toast.LENGTH_LONG)
                     .show()
+                Log.e("MainActivity", "Recording error: $error")
 
                 // Even if recording fails, proceed to next screen after showing error
                 Handler(Looper.getMainLooper()).postDelayed({
                     proceedToNextScreen()
                 }, 2000)
+            }
+
+            override fun onLogCaptureStarted() {
+                Log.d("MainActivity", "Log capture started automatically")
+            }
+
+            override fun onLogCaptureStopped(outputFile: File) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Logs saved: ${outputFile.name}",
+                    Toast.LENGTH_SHORT
+                ).show()
+                Log.d("MainActivity", "Log capture saved: ${outputFile.absolutePath}")
+            }
+
+            override fun onLogCaptureError(error: String) {
+                Log.e("MainActivity", "Log capture error: $error")
             }
         })
     }
@@ -187,6 +177,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         if (checkPermissions()) {
+            Log.d("MainActivity", "Starting unified recording (video + logs)")
+            // Start unified recording (video + logs automatically)
             qaSnapRecorder.startRecording()
         } else {
             Log.w("MainActivity", "Permissions check failed in startRecording")
@@ -195,24 +187,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun proceedToNextScreen() {
-        // Add a small delay to show the "Recording started" message
+        // Add a small delay to show the status messages
         Handler(Looper.getMainLooper()).postDelayed({
             if (!isFinishing) {
                 navigateToSignIn()
             }
-        }, 1000) // 1 second delay to show the toast
+        }, 1500) // 1.5 second delay to show the toast messages
     }
 
     private fun navigateToSignIn() {
         val intent = Intent(this, SignInActivity::class.java)
         startActivity(intent)
         finish()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        // Unregister app lifecycle observer
-        ProcessLifecycleOwner.get().lifecycle.removeObserver(appLifecycleObserver)
-        // Keep recording running when switching activities
     }
 }

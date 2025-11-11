@@ -286,11 +286,12 @@ class ScreenRecordingService : Service() {
             }
             Log.d(TAG, "Screen recording started successfully, notification should be visible")
 
-            // Start watchdog
-            lastHeartbeat = System.currentTimeMillis()
-            watchdogRunnable?.let { runnable ->
-                watchdogHandler?.postDelayed(runnable, WATCHDOG_TIMEOUT)
-            }
+            // Start watchdog (disabled for demo - causes premature stops)
+            // lastHeartbeat = System.currentTimeMillis()
+            // watchdogRunnable?.let { runnable ->
+            //     watchdogHandler?.postDelayed(runnable, WATCHDOG_TIMEOUT)
+            // }
+            Log.d(TAG, "Watchdog disabled for demo mode to prevent premature stops")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting recording", e)
             // Clean up if recording failed to start
@@ -335,10 +336,13 @@ class ScreenRecordingService : Service() {
         // Validate output file
         try {
             if (outputFile?.exists() == true) {
+                Log.d(TAG, "Output file already exists, deleting: ${outputFile?.absolutePath}")
                 outputFile?.delete()
             }
             outputFile?.createNewFile()
-            Log.d(TAG, "Output file created: ${outputFile?.absolutePath}")
+            Log.d(TAG, "Output file created successfully: ${outputFile?.absolutePath}")
+            Log.d(TAG, "Output file writeable: ${outputFile?.canWrite()}")
+            Log.d(TAG, "Output directory: ${outputFile?.parent}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create output file", e)
             throw IllegalStateException("Cannot create output file: ${e.message}")
@@ -441,12 +445,16 @@ class ScreenRecordingService : Service() {
 
             if (isRecording && mediaRecorder != null) {
                 try {
+                    Log.d(TAG, "Calling MediaRecorder.stop()...")
                     mediaRecorder?.stop()
                     Log.d(TAG, "MediaRecorder stopped successfully")
                 } catch (e: RuntimeException) {
                     Log.w(TAG, "Error stopping MediaRecorder: ${e.message}")
+                    Log.w(TAG, "This may be normal if recording was very short")
                     // Continue with cleanup even if stop fails
                 }
+            } else {
+                Log.d(TAG, "MediaRecorder is null or not recording, skipping stop()")
             }
 
             // Always cleanup resources
@@ -477,19 +485,27 @@ class ScreenRecordingService : Service() {
 
                 // Notify SDK about recording result
                 outputFile?.let { file ->
+                    Log.d(TAG, "Checking output file: ${file.absolutePath}")
+                    Log.d(TAG, "File exists: ${file.exists()}")
+                    Log.d(TAG, "File size: ${file.length()} bytes")
+                    Log.d(TAG, "File readable: ${file.canRead()}")
+
                     if (file.exists() && file.length() > 0) {
                         Log.d(
                             TAG,
-                            "Recording file saved: ${file.absolutePath}, size: ${file.length()}"
+                            "Recording file saved successfully: ${file.absolutePath}, size: ${file.length()}"
                         )
                         QASnapRecorder.getInstance()?.notifyRecordingStopped(file)
                     } else {
                         Log.w(TAG, "Recording file is empty or doesn't exist")
+                        Log.w(TAG, "File path: ${file.absolutePath}")
+                        Log.w(TAG, "Parent directory exists: ${file.parentFile?.exists()}")
+                        Log.w(TAG, "Parent directory writable: ${file.parentFile?.canWrite()}")
                         QASnapRecorder.getInstance()
                             ?.notifyRecordingError("Recording file is empty or doesn't exist")
                     }
                 } ?: run {
-                    Log.w(TAG, "Output file is null")
+                    Log.w(TAG, "Output file reference is null")
                     QASnapRecorder.getInstance()?.notifyRecordingError("Output file is null")
                 }
             } else {
@@ -554,8 +570,8 @@ class ScreenRecordingService : Service() {
         val seconds = (elapsedTime % 60000) / 1000
         val formattedTime = String.format("%02d:%02d", minutes, seconds)
 
-        // Update heartbeat to prevent watchdog timeout
-        lastHeartbeat = System.currentTimeMillis()
+        // Update heartbeat to prevent watchdog timeout (disabled for demo)
+        // lastHeartbeat = System.currentTimeMillis()
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("🔴 Screen Recording Active")

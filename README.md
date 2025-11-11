@@ -1,278 +1,381 @@
-# QA Snap SDK - Screen Recording SDK for Android
+# QA Snap SDK - Screen Recording & Log Capture
 
-QA Snap SDK adalah Android library yang menyediakan functionality screen recording untuk entire
-screen dengan output berupa file video MP4. SDK ini dirancang khusus untuk keperluan Quality
-Assurance (QA) testing dan dokumentasi user flow.
+Android SDK untuk screen recording dan log capture yang mudah digunakan untuk keperluan QA testing
+dan debugging.
 
-## Features
+## Fitur
 
-- ✅ **Entire Screen Recording** - Merekam seluruh layar perangkat
-- ✅ **MP4 Output** - Video disimpan dalam format MP4 berkualitas tinggi
-- ✅ **Easy Integration** - API yang mudah digunakan dengan lifecycle management
-- ✅ **Foreground Service** - Recording berjalan stabil di background
-- ✅ **Modern Android Support** - Mendukung Android API 21 sampai terbaru
-- ✅ **Kotlin First** - Ditulis dalam Kotlin dengan Java interoperability
+- ✅ **Screen Recording**: Merekam layar dalam format MP4
+- ✅ **ADB Log Capture**: Menangkap dan menyimpan ADB logs dalam format TXT
+- ✅ **Simultaneous Operation**: Menjalankan recording dan log capture bersamaan
+- ✅ **Foreground Service**: Berjalan stabil di background dengan notification
+- ✅ **Emergency Stop**: Penghentian otomatis saat crash atau force close
+- ✅ **Easy Integration**: API sederhana dan mudah digunakan
+- ✅ **Customizable**: Filter logs berdasarkan level, tag, atau package
+- ✅ **Auto File Management**: Penyimpanan otomatis dengan timestamp
 
-## Architecture
+## Installation
 
-Project ini terdiri dari 2 module utama:
+### 1. Tambahkan dependency dalam `build.gradle` (Module: app)
 
-### 1. QA Snap SDK (`qa-snap-sdk`)
-
-- **Package**: `io.codingskuy.qa_snap`
-- **Type**: Android Library Module
-- **Main Class**: `QASnapRecorder`
-- **Service**: `ScreenRecordingService`
-
-### 2. QA Snap Demo (`qa-snap-demo`)
-
-- **Package**: `io.codingskuy.qa_snap_demo`
-- **Type**: Android Application
-- **Flow**: Splash Screen → Sign In → Home (with recording controls)
-
-## Quick Start
-
-### 1. Add Dependency
-
-Tambahkan module dependency ke `build.gradle` app Anda:
-
-```gradle
+```kotlin
 dependencies {
     implementation project(':qa-snap-sdk')
 }
 ```
 
-### 2. Add Permissions
-
-Tambahkan permissions berikut ke `AndroidManifest.xml`:
+### 2. Tambahkan permissions dalam `AndroidManifest.xml`
 
 ```xml
 <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+<uses-permission android:name="android.permission.READ_LOGS" />
+
+<!-- Android 13+ -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 ```
 
-### 3. Initialize SDK
+### 3. Setup SDK di Application atau Activity
 
 ```kotlin
 class MainActivity : AppCompatActivity() {
     private lateinit var qaSnapRecorder: QASnapRecorder
-    
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Initialize QA Snap SDK
+        // Initialize SDK
         qaSnapRecorder = QASnapRecorder.initialize(this)
-        setupRecordingListener()
-    }
-    
-    private fun setupRecordingListener() {
+        
+        // Set listener
         qaSnapRecorder.setRecordingListener(object : QASnapRecorder.RecordingListener {
             override fun onRecordingStarted() {
-                // Recording dimulai
-                Log.d("QASnap", "Recording started")
+                // Screen recording dimulai
             }
             
             override fun onRecordingStopped(outputFile: File) {
-                // Recording selesai
-                Log.d("QASnap", "Recording saved: ${outputFile.absolutePath}")
+                // Screen recording selesai, file tersimpan
             }
             
             override fun onRecordingError(error: String) {
                 // Error saat recording
-                Log.e("QASnap", "Recording error: $error")
+            }
+            
+            override fun onLogCaptureStarted() {
+                // Log capture dimulai
+            }
+            
+            override fun onLogCaptureStopped(outputFile: File) {
+                // Log capture selesai, file tersimpan
+            }
+            
+            override fun onLogCaptureError(error: String) {
+                // Error saat log capture
             }
         })
     }
 }
 ```
 
-### 4. Start/Stop Recording
+## Penggunaan
 
+> **📝 Important Note**: QA Snap SDK menggunakan **unified recording approach**. Ketika Anda
+> memanggil `startRecording()`, SDK secara otomatis akan memulai screen recording DAN log capture
+> bersamaan. Ini memberikan dokumentasi QA yang comprehensive tanpa perlu memanggil multiple methods.
+
+### Default Behavior - Unified Recording
+QA Snap SDK dirancang dengan **unified recording** sebagai default behavior. Setiap kali Anda
+memulai screen recording, log capture akan otomatis dimulai bersamaan untuk memberikan dokumentasi
+QA yang comprehensive.
+
+#### Mulai Recording (Video + Logs)
 ```kotlin
-// Mulai recording
+// Ini akan memulai video recording DAN log capture secara bersamaan
 qaSnapRecorder.startRecording()
-
-// Berhenti recording  
-qaSnapRecorder.stopRecording()
-
-// Cek status recording
-val isRecording = qaSnapRecorder.isRecording()
-
-// Get output directory
-val outputDir = qaSnapRecorder.getOutputDirectory()
 ```
 
-## API Reference
+#### Stop Recording (Video + Logs)
+```kotlin
+// Ini akan menghentikan video recording DAN log capture secara bersamaan
+qaSnapRecorder.stopRecording()
+```
 
-### QASnapRecorder
+#### Cek Status
+```kotlin
+val isRecording = qaSnapRecorder.isRecording()
+val isCapturingLogs = qaSnapRecorder.isCapturingLogs()
+```
 
-Main class untuk mengontrol screen recording.
+### Advanced Control - Individual Operations
 
-#### Methods
+Jika Anda membutuhkan kontrol individual untuk video atau log saja:
 
-| Method | Description |
-|--------|-------------|
-| `initialize(activity: AppCompatActivity)` | Initialize SDK dengan activity context |
-| `getInstance()` | Get current SDK instance |
-| `setRecordingListener(listener: RecordingListener)` | Set callback listener untuk recording events |
-| `startRecording()` | Mulai screen recording (akan meminta permission) |
-| `stopRecording()` | Berhenti screen recording |
-| `isRecording(): Boolean` | Cek apakah sedang recording |
-| `getOutputDirectory(): File` | Get direktori tempat video disimpan |
+#### Log Capture Saja
+```kotlin
+// Mulai log capture saja (tanpa video)
+qaSnapRecorder.startLogCaptureOnly(
+    logLevel = "D",
+    tagFilter = "MyApp",
+    packageFilter = packageName
+)
 
-#### RecordingListener Interface
+// Stop log capture saja
+qaSnapRecorder.stopLogCaptureOnly()
+```
+
+#### Custom Recording dengan Log Settings
+```kotlin
+// Mulai recording dengan custom log settings
+qaSnapRecorder.startRecordingWithCustomLogs(
+    logLevel = "V",           // Log level custom
+    tagFilter = "NetworkManager", // Tag filter custom
+    packageFilter = packageName   // Package filter custom
+)
+```
+
+#### Stop Keduanya Bersamaan
 
 ```kotlin
-interface RecordingListener {
-    fun onRecordingStarted()
-    fun onRecordingStopped(outputFile: File)
-    fun onRecordingError(error: String)
-}
+qaSnapRecorder.stopRecordingWithLogs()
 ```
 
-## Demo Application Flow
+### Emergency Stop
 
-Demo aplikasi menunjukkan implementasi SDK dalam user flow yang kompleks:
+#### Emergency Stop Recording (bisa dipanggil dari mana saja)
 
-1. **MainActivity** (Splash Screen)
-    - Menampilkan splash screen 2 detik
-    - Initialize SDK dan mulai recording otomatis
-    - Navigate ke SignInActivity
+```kotlin
+QASnapRecorder.emergencyStopRecording(context)
+```
 
-2. **SignInActivity**
-    - Form login sederhana (email/password)
-    - Button "Skip" untuk bypass login
-    - Recording tetap berjalan di background
+#### Emergency Stop Semua (recording + log capture)
 
-3. **HomeActivity**
-    - Dashboard dengan berbagai button aktivitas
-    - Display status recording real-time
-    - Button "Stop Recording" untuk mengakhiri recording
-    - Konfirmasi dialog saat stop recording
+```kotlin
+QASnapRecorder.getInstance()?.emergencyStopAll(context)
+```
 
-## File Output
+### File Management
 
-- **Location**: `{ExternalFilesDir}/QASnapRecordings/`
-- **Format**: `qa_snap_recording_yyyyMMdd_HHmmss.mp4`
-- **Quality**: 1080p, 30fps, 6Mbps bitrate
-- **Example**: `qa_snap_recording_20241211_143052.mp4`
+#### Dapatkan Directory Output untuk Video
 
-## Technical Requirements
+```kotlin
+val videoDir = qaSnapRecorder.getOutputDirectory()
+// Default: /Android/data/[package]/files/QASnapRecordings/
+```
 
-- **Min SDK**: 21 (Android 5.0)
-- **Target SDK**: 34 (Android 14)
-- **Language**: Kotlin 1.9.10
-- **Gradle**: 8.5+
-- **Android Gradle Plugin**: 8.3.1
+#### Dapatkan Directory Output untuk Logs
 
-## Android Version Compatibility
+```kotlin
+val logDir = qaSnapRecorder.getLogOutputDirectory()
+// Default: /Android/data/[package]/files/QASnapLogs/
+```
 
-| Android Version | API Level | Status |
-|----------------|-----------|---------|
-| Android 5.0+   | 21-22     | ✅ Supported |
-| Android 6.0+   | 23-25     | ✅ Supported |
-| Android 7.0+   | 24-25     | ✅ Supported |
-| Android 8.0+   | 26-27     | ✅ Supported |
-| Android 9.0    | 28        | ✅ Supported |
-| Android 10     | 29        | ✅ Supported |
-| Android 11     | 30        | ✅ Supported |
-| Android 12+    | 31-34     | ✅ Supported |
+## Format Output Files
 
-## Permissions Handling
+### Video Files
 
-SDK akan otomatis meminta permission yang diperlukan:
+- **Format**: MP4 (H.264)
+- **Naming**: `qa_snap_recording_yyyyMMdd_HHmmss.mp4`
+- **Location**: `/Android/data/[package]/files/QASnapRecordings/`
 
-1. **Media Projection Permission** - Untuk screen capture
-2. **Storage Permission** - Untuk menyimpan video file
-3. **Audio Permission** - Untuk audio recording (optional)
-4. **Foreground Service** - Untuk recording di background
+### Log Files
+
+- **Format**: TXT (Plain text)
+- **Naming**: `qa_snap_logs_yyyyMMdd_HHmmss.txt`
+- **Location**: `/Android/data/[package]/files/QASnapLogs/`
+- **Content**: Logs dengan format timestamp + log content
+
+### Contoh Isi Log File
+
+```
+=== QA Snap Log Capture Started ===
+Timestamp: 2024-11-11 22:30:15
+Log Level: V
+Package Filter: com.myapp
+=====================================
+
+11-11 22:30:16.123 D/MyApp: Debug log message
+11-11 22:30:16.456 I/MyApp: Info log message
+11-11 22:30:16.789 W/MyApp: Warning log message
+11-11 22:30:17.012 E/MyApp: Error log message
+
+=== QA Snap Log Capture Ended ===
+End Timestamp: 2024-11-11 22:35:20
+```
+
+## Log Level Reference
+
+| Level | Keterangan                                     |
+|-------|------------------------------------------------|
+| `V`   | Verbose - Semua logs                           |
+| `D`   | Debug - Debug logs dan level yang lebih tinggi |
+| `I`   | Info - Info logs dan level yang lebih tinggi   |
+| `W`   | Warning - Warning dan error logs               |
+| `E`   | Error - Hanya error logs                       |
+| `F`   | Fatal - Hanya fatal error logs                 |
+| `S`   | Silent - Tidak ada logs                        |
 
 ## Best Practices
 
-1. **Initialize Early** - Initialize SDK di onCreate() activity utama
-2. **Single Instance** - Gunakan singleton pattern yang sudah disediakan
-3. **Proper Cleanup** - Pastikan stop recording sebelum app keluar
-4. **Storage Management** - Monitor ukuran file output directory
-5. **User Experience** - Berikan feedback visual saat recording aktif
-
-## Sample Usage in QA Testing
-
+### 1. Permission Handling
 ```kotlin
-class QATestCase : AppCompatActivity() {
-    private val qaSnap = QASnapRecorder.initialize(this)
+private fun checkAndRequestPermissions() {
+    val permissions = arrayOf(
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        Manifest.permission.READ_LOGS
+    )
     
-    fun startTestingFlow() {
-        // Mulai recording di awal test
-        qaSnap.startRecording()
-        
-        // Lakukan test case steps...
-        performUserActions()
-        
-        // Stop recording di akhir test
-        qaSnap.stopRecording()
-    }
-    
-    private fun performUserActions() {
-        // Login flow
-        clickLogin()
-        enterCredentials()
-        
-        // Main app flow  
-        navigateToFeature()
-        performCriticalAction()
-        verifyResults()
-    }
+    // Request permissions jika belum granted
+    ActivityCompat.requestPermissions(this, permissions, PERMISSION_REQUEST_CODE)
 }
 ```
+
+### 2. Lifecycle Management
+
+```kotlin
+override fun onDestroy() {
+    super.onDestroy()
+    // Stop recording saat activity destroyed untuk cleanup
+    qaSnapRecorder.stopRecordingWithLogs()
+}
+```
+
+### 3. Error Handling
+
+```kotlin
+override fun onRecordingError(error: String) {
+    Log.e("QASnap", "Recording error: $error")
+    // Handle error dan beri tahu user
+    Toast.makeText(this, "Recording failed: $error", Toast.LENGTH_LONG).show()
+}
+
+override fun onLogCaptureError(error: String) {
+    Log.e("QASnap", "Log capture error: $error")
+    // Handle error dan beri tahu user
+    Toast.makeText(this, "Log capture failed: $error", Toast.LENGTH_LONG).show()
+}
+```
+
+### 4. Filter Logs untuk Debugging
+
+```kotlin
+// Hanya capture logs dari app tertentu
+qaSnapRecorder.startLogCaptureOnly(
+    logLevel = "D",
+    packageFilter = "com.mycompany.myapp"
+)
+
+// Hanya capture logs dengan tag tertentu
+qaSnapRecorder.startLogCaptureOnly(
+    logLevel = "I", 
+    tagFilter = "NetworkManager"
+)
+
+// Capture logs error dan fatal saja
+qaSnapRecorder.startLogCaptureOnly(
+    logLevel = "E"
+)
+```
+
+## Example App
+
+Lihat implementasi lengkap di folder `qa-snap-demo` yang mencakup:
+
+- Setup permissions
+- Screen recording
+- Log capture
+- Error handling
+- UI untuk testing
+
+### Menjalankan Demo
+
+```bash
+git clone [repository]
+cd qa-snap-sample
+./gradlew qa-snap-demo:installDebug
+```
+
+## Requirements
+
+- **Min SDK**: 21 (Android 5.0)
+- **Target SDK**: 34 (Android 14)
+- **Compile SDK**: 34
+- **Kotlin**: 1.9.0+
+- **Gradle**: 8.0+
+
+## Permissions yang Diperlukan
+
+### Runtime Permissions
+
+- `RECORD_AUDIO` - Untuk audio dalam screen recording
+- `WRITE_EXTERNAL_STORAGE` - Untuk menyimpan files (Android ≤ 10)
+- `READ_MEDIA_VIDEO` - Untuk akses media (Android ≥ 13)
+- `POST_NOTIFICATIONS` - Untuk foreground service notification (Android ≥ 13)
+
+### Manifest Permissions
+
+- `FOREGROUND_SERVICE` - Untuk menjalankan foreground service
+- `FOREGROUND_SERVICE_MEDIA_PROJECTION` - Untuk media projection service
+- `FOREGROUND_SERVICE_DATA_SYNC` - Untuk log capture service
+- `READ_LOGS` - Untuk membaca system logs
 
 ## Troubleshooting
 
-### Common Issues
+### 1. Recording Tidak Mulai
 
-1. **Permission Denied Error**
-    - Pastikan semua permission sudah ditambahkan di manifest
-    - Test pada device fisik, bukan emulator
+- Pastikan permissions sudah granted
+- Cek apakah device mendukung MediaProjection
+- Pastikan tidak ada recording lain yang aktif
 
-2. **Recording File Empty**
-    - Cek available storage space
-    - Pastikan external storage permission granted
+### 2. Log Capture Kosong
 
-3. **Service Not Starting**
-    - Cek target SDK compatibility
-    - Pastikan foreground service permission ada
+- Pastikan permission `READ_LOGS` granted
+- Cek apakah ada logs yang sesuai dengan filter
+- Pastikan aplikasi generate logs saat capture aktif
 
-### Debug Mode
+### 3. Files Tidak Tersimpan
 
-Enable logging untuk debugging:
+- Cek permission storage
+- Pastikan storage tidak penuh
+- Cek path directory yang benar
 
-```kotlin
-// Enable di development build
-if (BuildConfig.DEBUG) {
-    Log.d("QASnap", "Debug mode enabled")
-}
-```
+### 4. Service Terhenti
 
-## License
-
-MIT License - Lihat file LICENSE untuk detail lengkap.
+- Pastikan app tidak di-kill oleh system
+- Cek battery optimization settings
+- Emergency stop akan dipanggil otomatis saat crash
 
 ## Contributing
 
 1. Fork repository
 2. Create feature branch
 3. Commit changes
-4. Push to branch
+4. Push ke branch
 5. Create Pull Request
 
-## Support
+## License
 
-Untuk pertanyaan dan support:
+```
+MIT License
+Copyright (c) 2024 QA Snap SDK
+```
 
-- Email: support@codingskuy.io
-- GitHub Issues: [Create Issue](https://github.com/codingskuy/qa-snap-sdk/issues)
+## Changelog
 
----
+### v1.1.0 (Current)
 
-**QA Snap SDK v1.0** - Making QA testing easier with automated screen recording 🎬
+- ✅ Added ADB log capture functionality
+- ✅ Added simultaneous recording + log capture
+- ✅ Added customizable log filters (level, tag, package)
+- ✅ Added emergency stop for all operations
+- ✅ Improved error handling and notifications
+- ✅ Added comprehensive documentation
+
+### v1.0.0
+
+- ✅ Initial release with screen recording functionality
+- ✅ Foreground service implementation
+- ✅ Basic error handling and emergency stop
