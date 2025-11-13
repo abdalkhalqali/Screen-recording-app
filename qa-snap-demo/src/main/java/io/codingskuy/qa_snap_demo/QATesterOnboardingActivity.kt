@@ -6,9 +6,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.textfield.TextInputEditText
 import io.codingskuy.qa_snap_demo.utils.EnvironmentManager
 
 /**
@@ -62,11 +61,10 @@ class QATesterOnboardingActivity : AppCompatActivity() {
         }
     }
 
-    private lateinit var etTestCaseTitle: EditText
-    private lateinit var etTestCaseId: EditText
-    private lateinit var etReference: EditText
-    private lateinit var btnContinue: Button
-    private lateinit var btnSkip: Button
+    private lateinit var etAreaTest: TextInputEditText
+    private lateinit var etTestCaseDescription: TextInputEditText
+    private lateinit var etPenessumopan: TextInputEditText
+    private lateinit var btnGasHunting: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,42 +76,35 @@ class QATesterOnboardingActivity : AppCompatActivity() {
         setupListeners()
         
         // Pre-fill default values
-        etTestCaseTitle.setText("Bug Hunting")
+        etAreaTest.setText("Bug Hunting")
     }
 
     private fun initViews() {
-        etTestCaseTitle = findViewById(R.id.etTestCaseTitle)
-        etTestCaseId = findViewById(R.id.etTestCaseId)
-        etReference = findViewById(R.id.etReference)
-        btnContinue = findViewById(R.id.btnContinue)
-        btnSkip = findViewById(R.id.btnSkip)
+        etAreaTest = findViewById(R.id.etAreaTest)
+        etTestCaseDescription = findViewById(R.id.etTestCaseDescription)
+        etPenessumopan = findViewById(R.id.etPenessumopan)
+        btnGasHunting = findViewById(R.id.btnGasHunting)
     }
 
     private fun setupListeners() {
-        btnContinue.setOnClickListener {
+        btnGasHunting.setOnClickListener {
             saveTestCaseInfo()
-            markOnboardingCompleted()
-            navigateToMainApp()
-        }
-
-        btnSkip.setOnClickListener {
-            Log.d(TAG, "Onboarding skipped by tester")
             markOnboardingCompleted()
             navigateToMainApp()
         }
     }
 
     private fun saveTestCaseInfo() {
-        val testCaseTitle = etTestCaseTitle.text.toString().trim().ifEmpty { "Bug Hunting" }
-        val testCaseId = etTestCaseId.text.toString().trim()
-        val reference = etReference.text.toString().trim()
+        val areaTest = etAreaTest.text.toString().trim().ifEmpty { "Bug Hunting" }
+        val testCaseDescription = etTestCaseDescription.text.toString().trim()
+        val penessumopan = etPenessumopan.text.toString().trim()
 
         // Save to SharedPreferences for SDK access
         val prefs = getSharedPreferences("qa_snap_test_info", MODE_PRIVATE)
         prefs.edit().apply {
-            putString("test_case_title", testCaseTitle)
-            putString("test_case_id", testCaseId)
-            putString("reference", reference)
+            putString("area_test", areaTest)
+            putString("test_case_description", testCaseDescription)
+            putString("penessumopan", penessumopan)
             putLong("setup_timestamp", System.currentTimeMillis())
             putString("device_model", android.os.Build.MODEL)
             putString("device_manufacturer", android.os.Build.MANUFACTURER)
@@ -122,9 +113,9 @@ class QATesterOnboardingActivity : AppCompatActivity() {
         }
 
         Log.d(TAG, "Test case info saved:")
-        Log.d(TAG, "Title: $testCaseTitle")
-        Log.d(TAG, "ID: $testCaseId")
-        Log.d(TAG, "Reference: $reference")
+        Log.d(TAG, "Area Test: $areaTest")
+        Log.d(TAG, "Description: $testCaseDescription")
+        Log.d(TAG, "Penessumopan: $penessumopan")
         Log.d(TAG, "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
         Log.d(TAG, "Android: ${android.os.Build.VERSION.RELEASE}")
         Log.d(TAG, "Timestamp: ${System.currentTimeMillis()}")

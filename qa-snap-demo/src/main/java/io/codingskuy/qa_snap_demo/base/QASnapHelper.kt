@@ -187,10 +187,10 @@ class QASnapHelper(private val activity: AppCompatActivity) : QASnapRecorder.Rec
                 android.content.Context.MODE_PRIVATE
             )
 
-            // Get test case information
-            val testCaseTitle = prefs.getString("test_case_title", "Bug Hunting") ?: "Bug Hunting"
-            val testCaseId = prefs.getString("test_case_id", "") ?: ""
-            val reference = prefs.getString("reference", "") ?: ""
+            // Get test case information - updated field names to match new layout
+            val areaTest = prefs.getString("area_test", "Bug Hunting") ?: "Bug Hunting"
+            val testCaseDescription = prefs.getString("test_case_description", "") ?: ""
+            val penessumopan = prefs.getString("penessumopan", "") ?: ""
             val setupTimestamp = prefs.getLong("setup_timestamp", 0L)
             val deviceModel =
                 prefs.getString("device_model", android.os.Build.MODEL) ?: android.os.Build.MODEL
@@ -210,9 +210,9 @@ class QASnapHelper(private val activity: AppCompatActivity) : QASnapRecorder.Rec
 
             // Log comprehensive test case information
             Log.i(TAG, "=== QA SNAP RECORDING SESSION STARTED ===")
-            Log.i(TAG, "Test Case Title: $testCaseTitle")
-            Log.i(TAG, "Test Case ID: ${testCaseId.ifEmpty { "Not specified" }}")
-            Log.i(TAG, "Reference: ${reference.ifEmpty { "Not specified" }}")
+            Log.i(TAG, "Area Test: $areaTest")
+            Log.i(TAG, "Test Case Description: ${testCaseDescription.ifEmpty { "Not specified" }}")
+            Log.i(TAG, "Penessumopan: ${penessumopan.ifEmpty { "Not specified" }}")
             Log.i(TAG, "Session Start Time: $sessionStartFormatted")
             Log.i(TAG, "Setup Time: $setupTimeFormatted")
             Log.i(TAG, "Device: $deviceManufacturer $deviceModel")
