@@ -12,6 +12,9 @@ import io.codingskuy.qa_snap.QASnapActivity
 import io.codingskuy.qa_snap.QASnapRecorder
 import io.codingskuy.qa_snap_demo.utils.EnvironmentManager
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * QASnapHelper - Helper class to manage QA Snap SDK integration with proper permission flow
@@ -152,6 +155,9 @@ class QASnapHelper(private val activity: AppCompatActivity) : QASnapRecorder.Rec
                 return
             }
 
+            // Log test case information before starting recording
+            logTestCaseInformation()
+
             qaSnapRecorder?.let { recorder ->
                 if (!recorder.isRecording()) {
                     // Basic permissions are granted, now start recording
@@ -172,6 +178,87 @@ class QASnapHelper(private val activity: AppCompatActivity) : QASnapRecorder.Rec
     }
 
     /**
+     * Log test case information from onboarding setup
+     */
+    private fun logTestCaseInformation() {
+        try {
+            val prefs = activity.getSharedPreferences(
+                "qa_snap_test_info",
+                android.content.Context.MODE_PRIVATE
+            )
+
+            // Get test case information
+            val testCaseTitle = prefs.getString("test_case_title", "Bug Hunting") ?: "Bug Hunting"
+            val testCaseId = prefs.getString("test_case_id", "") ?: ""
+            val reference = prefs.getString("reference", "") ?: ""
+            val setupTimestamp = prefs.getLong("setup_timestamp", 0L)
+            val deviceModel =
+                prefs.getString("device_model", android.os.Build.MODEL) ?: android.os.Build.MODEL
+            val deviceManufacturer =
+                prefs.getString("device_manufacturer", android.os.Build.MANUFACTURER)
+                    ?: android.os.Build.MANUFACTURER
+            val androidVersion =
+                prefs.getString("android_version", android.os.Build.VERSION.RELEASE)
+                    ?: android.os.Build.VERSION.RELEASE
+
+            // Current session information
+            val sessionStartTime = System.currentTimeMillis()
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val sessionStartFormatted = dateFormat.format(Date(sessionStartTime))
+            val setupTimeFormatted =
+                if (setupTimestamp > 0) dateFormat.format(Date(setupTimestamp)) else "Not available"
+
+            // Log comprehensive test case information
+            Log.i(TAG, "=== QA SNAP RECORDING SESSION STARTED ===")
+            Log.i(TAG, "Test Case Title: $testCaseTitle")
+            Log.i(TAG, "Test Case ID: ${testCaseId.ifEmpty { "Not specified" }}")
+            Log.i(TAG, "Reference: ${reference.ifEmpty { "Not specified" }}")
+            Log.i(TAG, "Session Start Time: $sessionStartFormatted")
+            Log.i(TAG, "Setup Time: $setupTimeFormatted")
+            Log.i(TAG, "Device: $deviceManufacturer $deviceModel")
+            Log.i(TAG, "Android Version: $androidVersion")
+            Log.i(TAG, "Environment: ${EnvironmentManager.getEnvironmentDisplayName()}")
+            Log.i(
+                TAG,
+                "App Version: ${
+                    activity.packageManager.getPackageInfo(
+                        activity.packageName,
+                        0
+                    ).versionName
+                }"
+            )
+            Log.i(TAG, "Process ID: ${android.os.Process.myPid()}")
+            Log.i(TAG, "Thread ID: ${Thread.currentThread().id}")
+            Log.i(TAG, "Available Memory: ${Runtime.getRuntime().freeMemory() / 1024 / 1024} MB")
+            Log.i(TAG, "==========================================")
+
+            // Also log device specifications
+            Log.i(TAG, "=== DEVICE SPECIFICATIONS ===")
+            Log.i(TAG, "Brand: ${android.os.Build.BRAND}")
+            Log.i(TAG, "Model: ${android.os.Build.MODEL}")
+            Log.i(TAG, "Device: ${android.os.Build.DEVICE}")
+            Log.i(TAG, "Product: ${android.os.Build.PRODUCT}")
+            Log.i(TAG, "Hardware: ${android.os.Build.HARDWARE}")
+            Log.i(TAG, "Board: ${android.os.Build.BOARD}")
+            Log.i(TAG, "SDK Version: ${android.os.Build.VERSION.SDK_INT}")
+            Log.i(TAG, "Android Version: ${android.os.Build.VERSION.RELEASE}")
+            Log.i(TAG, "Build ID: ${android.os.Build.ID}")
+            Log.i(TAG, "=============================")
+
+            // Save session information for later reference
+            prefs.edit().apply {
+                putLong("last_session_start", sessionStartTime)
+                putString("last_session_start_formatted", sessionStartFormatted)
+                apply()
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log test case information", e)
+            // Don't fail the recording start if logging fails
+        }
+    }
+
+    /**
      * Stop QA recording
      */
     fun stopRecording() {
@@ -182,6 +269,10 @@ class QASnapHelper(private val activity: AppCompatActivity) : QASnapRecorder.Rec
 
         try {
             Log.d(TAG, "Stopping QA recording...")
+
+            // Log session end information
+            logSessionEndInformation()
+
             qaSnapRecorder?.let { recorder ->
                 if (recorder.isRecording()) {
                     // Stop actual QA Snap recording
@@ -196,6 +287,43 @@ class QASnapHelper(private val activity: AppCompatActivity) : QASnapRecorder.Rec
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop QA recording", e)
             callback?.onQARecordingError("Failed to stop recording: ${e.message}")
+        }
+    }
+
+    /**
+     * Log session end information
+     */
+    private fun logSessionEndInformation() {
+        try {
+            val prefs = activity.getSharedPreferences(
+                "qa_snap_test_info",
+                android.content.Context.MODE_PRIVATE
+            )
+            val sessionStartTime = prefs.getLong("last_session_start", 0L)
+            val sessionEndTime = System.currentTimeMillis()
+            val sessionDuration = sessionEndTime - sessionStartTime
+
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val sessionEndFormatted = dateFormat.format(Date(sessionEndTime))
+            val durationSeconds = sessionDuration / 1000
+            val durationMinutes = durationSeconds / 60
+
+            Log.i(TAG, "=== QA SNAP RECORDING SESSION ENDED ===")
+            Log.i(TAG, "Session End Time: $sessionEndFormatted")
+            Log.i(TAG, "Session Duration: ${durationMinutes}m ${durationSeconds % 60}s")
+            Log.i(TAG, "Total Duration (ms): $sessionDuration")
+            Log.i(TAG, "=======================================")
+
+            // Save end session information
+            prefs.edit().apply {
+                putLong("last_session_end", sessionEndTime)
+                putLong("last_session_duration", sessionDuration)
+                putString("last_session_end_formatted", sessionEndFormatted)
+                apply()
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log session end information", e)
         }
     }
 

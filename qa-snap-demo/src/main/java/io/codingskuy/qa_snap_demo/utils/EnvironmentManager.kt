@@ -3,6 +3,7 @@ package io.codingskuy.qa_snap_demo.utils
 import android.content.Context
 import android.util.Log
 import io.codingskuy.qa_snap_demo.BuildConfig
+import io.codingskuy.qa_snap_demo.QATesterOnboardingActivity
 
 /**
  * EnvironmentManager - Manages environment-specific configurations

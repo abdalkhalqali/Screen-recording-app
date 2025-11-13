@@ -31,14 +31,25 @@
         android:label="QA Snap Demo"
         android:theme="@style/Theme.QASnapDemo">
 
+        <!-- LauncherActivity - Main entry point that determines navigation flow -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LauncherActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- QA Tester Onboarding - Only shown in staging environment -->
+        <activity
+            android:name=".QATesterOnboardingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.QASnapDemo" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
 
         <activity
             android:name=".SplashActivity"
