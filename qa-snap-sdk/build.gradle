@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.kotlinAndroid)
+    id 'maven-publish'
 }
 
 android {
@@ -13,26 +14,10 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
-    }
 
-    // Product Flavors to match the demo app
-    flavorDimensions = ["environment"]
-
-    productFlavors {
-        development {
-            dimension "environment"
-            // Development flavor for SDK
-        }
-
-        staging {
-            dimension "environment"
-            // Staging flavor for SDK
-        }
-
-        production {
-            dimension "environment"
-            // Production flavor for SDK
-        }
+        // SDK version information
+        versionCode 1
+        versionName "1.0.0"
     }
 
     buildTypes {
@@ -58,6 +43,13 @@ android {
         abortOnError false
         checkReleaseBuilds false
     }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
 }
 
 dependencies {
@@ -73,3 +65,48 @@ dependencies {
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
 }
+
+// JitPack publishing configuration
+afterEvaluate {
+    publishing {
+        publications {
+            maven(MavenPublication) {
+                from components.release
+
+                groupId = 'io.codingskuy'
+                artifactId = 'qa-snap-sdk'
+                version = '1.0.0'
+
+                pom {
+                    name = 'QA Snap SDK'
+                    description = 'Android SDK for QA testing with screen recording and log capture capabilities'
+                    url = 'https://github.com/Coding-Skuy/qa-snap-sdk'
+
+                    licenses {
+                        license {
+                            name = 'MIT License'
+                            url = 'https://opensource.org/licenses/MIT'
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id = 'coding-skuy'
+                            name = 'Coding Skuy Team'
+                            email = 'codingskuy.io@gmail.com'
+                        }
+                    }
+
+                    scm {
+                        connection = 'scm:git:git://github.com/Coding-Skuy/qa-snap-sdk.git'
+                        developerConnection = 'scm:git:ssh://git@github.com/Coding-Skuy/qa-snap-sdk.git'
+                        url = 'https://github.com/Coding-Skuy/qa-snap-sdk'
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Uncomment line below to use advanced Maven Central publishing
+// apply from: '../scripts/publish-maven.gradle'

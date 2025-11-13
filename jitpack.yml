@@ -1,0 +1,12 @@
+jdk:
+  - openjdk11
+
+before_install:
+  - sdk install java 11.0.11.hs-adpt || true
+  - sdk use java 11.0.11.hs-adpt || true
+
+install:
+  - ./gradlew qa-snap-sdk:assembleRelease qa-snap-sdk:publishToMavenLocal
+
+# Skip the default install step
+skip_install: true
