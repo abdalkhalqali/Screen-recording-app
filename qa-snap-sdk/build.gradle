@@ -15,7 +15,32 @@ android {
         consumerProguardFiles "consumer-rules.pro"
     }
 
+    // Product Flavors to match the demo app
+    flavorDimensions = ["environment"]
+
+    productFlavors {
+        development {
+            dimension "environment"
+            // Development flavor for SDK
+        }
+
+        staging {
+            dimension "environment"
+            // Staging flavor for SDK
+        }
+
+        production {
+            dimension "environment"
+            // Production flavor for SDK
+        }
+    }
+
     buildTypes {
+        debug {
+            debuggable true
+            minifyEnabled false
+        }
+
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

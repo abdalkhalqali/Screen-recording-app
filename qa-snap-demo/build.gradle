@@ -17,21 +17,75 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Product Flavors for different environments
+    flavorDimensions = ["environment"]
+
+    productFlavors {
+        development {
+            dimension "environment"
+            applicationIdSuffix ".dev"
+            versionNameSuffix "-dev"
+
+            buildConfigField "String", "ENVIRONMENT", "\"development\""
+            buildConfigField "String", "BASE_URL", "\"https://api-dev.example.com\""
+            buildConfigField "boolean", "ENABLE_QA_SNAP", "false"
+            buildConfigField "boolean", "ENABLE_LOGGING", "true"
+
+            resValue "string", "app_name", "QA Snap Demo (Dev)"
+        }
+
+        staging {
+            dimension "environment"
+            applicationIdSuffix ".staging"
+            versionNameSuffix "-staging"
+
+            buildConfigField "String", "ENVIRONMENT", "\"staging\""
+            buildConfigField "String", "BASE_URL", "\"https://api-staging.example.com\""
+            buildConfigField "boolean", "ENABLE_QA_SNAP", "true"
+            buildConfigField "boolean", "ENABLE_LOGGING", "true"
+
+            resValue "string", "app_name", "QA Snap Demo (Staging)"
+        }
+
+        production {
+            dimension "environment"
+            // No suffix for production - clean application ID
+
+            buildConfigField "String", "ENVIRONMENT", "\"production\""
+            buildConfigField "String", "BASE_URL", "\"https://api.example.com\""
+            buildConfigField "boolean", "ENABLE_QA_SNAP", "false"
+            buildConfigField "boolean", "ENABLE_LOGGING", "false"
+
+            resValue "string", "app_name", "QA Snap Demo"
+        }
+    }
+
     buildTypes {
+        debug {
+            debuggable true
+            minifyEnabled false
+            // Debug-specific configurations
+        }
+
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Release-specific configurations
         }
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
     kotlinOptions {
         jvmTarget = '1.8'
     }
+
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 
     lint {

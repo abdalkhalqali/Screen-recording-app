@@ -6,20 +6,20 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import io.codingskuy.qa_snap.QASnapActivity
+import io.codingskuy.qa_snap_demo.base.BaseActivity
+import io.codingskuy.qa_snap_demo.utils.EnvironmentManager
 import java.io.File
 
 /**
- * MainActivity - Entry point using simplified QA Snap integration
+ * MainActivity - Entry point with environment-aware QA Snap integration
  *
- * This demonstrates how easy it is to integrate QA Snap SDK:
- * - Extend QASnapActivity (zero setup!)
- * - Recording starts automatically
- * - Permissions handled automatically
- * - Files saved automatically
+ * This demonstrates the new multi-environment approach:
+ * - Extends BaseActivity (environment-aware)
+ * - QA Snap only works in staging environment
+ * - Automatic environment detection and configuration
+ * - Clean fallback for development and production
  */
-class MainActivity : QASnapActivity() {
+class MainActivity : BaseActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
@@ -29,90 +29,101 @@ class MainActivity : QASnapActivity() {
     private var hasNavigated = false
     private var isRecordingStarted = false
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        // Prevent cleanup on destroy so recording continues to next activity
-        shouldCleanupOnDestroy = false
+    override val shouldCleanupOnDestroy: Boolean = false // Continue recording to next activity
 
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        Log.d(TAG, "MainActivity onCreate - initializing QA recording")
-        Log.d(TAG, "Is this a fresh app launch? ${savedInstanceState == null}")
-        Log.d(TAG, "Current process ID: ${android.os.Process.myPid()}")
-        Log.d(TAG, "About to call super.onCreate() which will initialize QASnapHelper")
+        Log.d(
+            TAG,
+            "MainActivity onCreate - Environment: ${EnvironmentManager.getEnvironmentDisplayName()}"
+        )
+        Log.d(TAG, "QA Snap enabled: ${EnvironmentManager.isQASnapEnabled()}")
+        Log.d(TAG, "Is fresh app launch? ${savedInstanceState == null}")
+        Log.d(TAG, "Process ID: ${android.os.Process.myPid()}")
 
-        // Don't navigate immediately - wait for recording to be ready
-        // Navigation will be triggered by onQARecordingReady()
+        // Show environment info to user
+        showEnvironmentInfo()
 
-        Log.d(TAG, "MainActivity onCreate completed")
+        // Navigation will be triggered by QA callbacks or fallback timer
+        if (!EnvironmentManager.isQASnapEnabled()) {
+            // No QA Snap in this environment, start navigation timer immediately
+            Log.d(TAG, "QA Snap disabled, starting immediate navigation")
+            startNavigationTimer()
+        }
+        // If QA Snap is enabled, we'll handle it in onQARecordingReady()
     }
 
-    // Override to enable recording always for demo purposes
-    override fun shouldAutoStartRecording(): Boolean {
-        Log.d(TAG, "shouldAutoStartRecording() -> true")
-        return true // Always record in demo app
-    }
+    private fun showEnvironmentInfo() {
+        val environmentName = EnvironmentManager.getEnvironmentDisplayName()
+        val appName = EnvironmentManager.getAppName(this)
 
-    // Called when QA recording is ready to start (after permissions granted)
-    override fun onQARecordingReady() {
-        Log.d(TAG, "onQARecordingReady() called")
-        Log.d(TAG, "Current thread: ${Thread.currentThread().name}")
-        Log.d(TAG, "Activity finishing: $isFinishing")
-        Toast.makeText(this, "QA Recording is ready! Starting recording...", Toast.LENGTH_SHORT)
-            .show()
+        supportActionBar?.title = appName
 
-        // Start recording explicitly (this will trigger MediaProjection permission)
-        Log.d(TAG, "Calling startQARecording() to trigger MediaProjection permission")
-        startQARecording()
-
-        // DON'T start navigation timer here - wait for user to click Start in MediaProjection popup
-        Log.d(TAG, "Waiting for user to grant MediaProjection permission before navigation")
-    }
-
-    // Called when QA recording actually starts
-    override fun onQARecordingStarted() {
-        Log.d(TAG, "onQARecordingStarted() called - Recording is now active!")
-        Log.d(TAG, "Current thread: ${Thread.currentThread().name}")
-        Log.d(TAG, "Activity finishing: $isFinishing")
-        isRecordingStarted = true
-        Toast.makeText(this, "✅ QA Recording is now active!", Toast.LENGTH_SHORT).show()
-
-        // NOW start navigation timer after user clicked Start in MediaProjection popup
-        Log.d(TAG, "Recording started, now starting navigation timer")
-        startNavigationTimer()
-
-        Log.d(TAG, "Recording started successfully, navigation timer will handle navigation")
-    }
-
-    // Called when QA recording completes (both video and logs saved)
-    override fun onQARecordingComplete(videoFile: File?, logFile: File?) {
-        val message = when {
-            videoFile != null && logFile != null -> "QA Session completed! Video & logs saved."
-            videoFile != null -> "Video saved: ${videoFile.name}"
-            logFile != null -> "Logs saved: ${logFile.name}"
-            else -> "QA Recording completed"
+        val message = when (EnvironmentManager.getCurrentEnvironment()) {
+            EnvironmentManager.Environment.DEVELOPMENT -> " Development Environment"
+            EnvironmentManager.Environment.STAGING -> " Staging Environment - QA Recording Available"
+            EnvironmentManager.Environment.PRODUCTION -> " Production Environment"
         }
 
-        Log.d(TAG, "onQARecordingComplete() - $message")
-        Log.d(TAG, "Current thread: ${Thread.currentThread().name}")
-        Log.d(TAG, "Activity finishing: $isFinishing")
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        Log.d(TAG, "Environment: $environmentName")
+        if (EnvironmentManager.isLoggingEnabled()) {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
 
-        // Optional: You could upload files, show detailed dialog, etc.
-        // uploadQAFilesToServer(videoFile, logFile)
-        // showDetailedCompletionDialog(videoFile, logFile)
+    // Override to manually control when to start recording
+    override fun shouldAutoStartRecording(): Boolean {
+        // Enable auto-start so QASnapHelper handles the proper permission flow
+        return true
+    }
+
+    // Called when QA recording is ready to start (only in staging)
+    override fun onQARecordingReady() {
+        super.onQARecordingReady()
+        Log.d(TAG, "onQARecordingReady() - Staging environment detected")
+
+        // Don't manually start recording here - let shouldAutoStartRecording() handle it
+        // The QASnapHelper will handle the permission flow and auto-start recording
+        Log.d(TAG, "QA recording ready - auto-start is enabled, waiting for proper permission flow")
+    }
+
+    // Called when QA recording actually starts (only in staging)
+    override fun onQARecordingStarted() {
+        super.onQARecordingStarted()
+        Log.d(TAG, "onQARecordingStarted() - Recording is now active!")
+        isRecordingStarted = true
+
+        // Now start navigation timer after recording starts
+        Log.d(TAG, "Recording started, now starting navigation timer")
+        startNavigationTimer()
+    }
+
+    // Called when QA recording completes (only in staging)
+    override fun onQARecordingComplete(videoFile: File?, logFile: File?) {
+        super.onQARecordingComplete(videoFile, logFile)
+        Log.d(TAG, "QA recording session completed")
+
+        // Show additional completion info in staging
+        if (EnvironmentManager.isLoggingEnabled()) {
+            val details = buildString {
+                append("QA Session Complete!\n")
+                videoFile?.let { append("Video: ${it.name}\n") }
+                logFile?.let { append("Logs: ${it.name}\n") }
+                append("Environment: ${EnvironmentManager.getEnvironmentDisplayName()}")
+            }
+            Toast.makeText(this, details, Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onQARecordingError(error: String) {
-        Log.e(TAG, "QA Recording error: $error")
-        Toast.makeText(this, "Recording error: $error", Toast.LENGTH_LONG).show()
+        super.onQARecordingError(error)
+        Log.e(TAG, "QA Recording error in MainActivity: $error")
 
-        // If recording fails or user cancels MediaProjection, continue with app flow
+        // Continue with app flow even if recording fails
         if (!hasNavigated) {
-            Log.d(
-                TAG,
-                "Recording failed or cancelled, but continuing with navigation after short delay"
-            )
+            Log.d(TAG, "Recording failed, continuing with navigation")
             startNavigationTimer()
         }
     }
@@ -133,47 +144,37 @@ class MainActivity : QASnapActivity() {
         }
 
         hasNavigated = true
-        Log.d(TAG, "Setting hasNavigated = true, navigating to SignInActivity")
+        Log.d(TAG, "Navigating to SignInActivity")
 
         try {
             val intent = Intent(this, SignInActivity::class.java)
-            Log.d(TAG, "Created intent for SignInActivity")
             startActivity(intent)
-            Log.d(TAG, "Started SignInActivity, calling finish()")
             finish()
-            Log.d(TAG, "MainActivity.finish() called")
+            Log.d(TAG, "Navigation completed successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Error navigating to SignInActivity", e)
             hasNavigated = false // Reset on error
         }
     }
 
-    private fun startFallbackNavigation() {
-        Log.d(TAG, "Starting fallback navigation timer (10 seconds)")
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (!hasNavigated && !isFinishing) {
-                Log.w(TAG, "Fallback navigation triggered - recording took too long")
-                Toast.makeText(this, "Continuing without recording...", Toast.LENGTH_SHORT).show()
-                navigateToSignIn()
+    // Debug methods for development
+    private fun logEnvironmentDetails() {
+        if (EnvironmentManager.isLoggingEnabled()) {
+            val info = getEnvironmentInfo()
+            Log.d(TAG, "=== ENVIRONMENT DETAILS ===")
+            info.forEach { (key, value) ->
+                Log.d(TAG, "$key: $value")
             }
-        }, 10000L) // 10-second fallback
+            Log.d(TAG, "===========================")
+        }
     }
 
-    // Optional: Manual control methods if needed for debugging
-    private fun startRecordingManually() {
-        Log.d(TAG, "Manual start recording requested")
-        startQARecording()
-    }
+    override fun onResume() {
+        super.onResume()
 
-    private fun stopRecordingManually() {
-        Log.d(TAG, "Manual stop recording requested")
-        stopQARecording()
-    }
-
-    private fun checkRecordingStatus() {
-        val isRecording = isQARecording()
-        Log.d(TAG, "Recording status check: $isRecording")
-        Toast.makeText(this, "Recording status: $isRecording", Toast.LENGTH_SHORT).show()
+        // Log additional details in development/staging
+        if (EnvironmentManager.getCurrentEnvironment() != EnvironmentManager.Environment.PRODUCTION) {
+            logEnvironmentDetails()
+        }
     }
 }

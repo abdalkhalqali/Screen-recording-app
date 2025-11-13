@@ -4,20 +4,23 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import io.codingskuy.qa_snap.QASnapRecorder
+import io.codingskuy.qa_snap_demo.base.BaseActivity
 import io.codingskuy.qa_snap_demo.databinding.ActivitySignInBinding
 
 /**
  * SignInActivity - User authentication screen
  */
-class SignInActivity : AppCompatActivity() {
+class SignInActivity : BaseActivity() {
 
     companion object {
         private const val TAG = "SignInActivity"
     }
 
     private lateinit var binding: ActivitySignInBinding
+
+    // Continue recording - don't stop when SignInActivity is destroyed  
+    override val shouldCleanupOnDestroy: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

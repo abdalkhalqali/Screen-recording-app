@@ -12,8 +12,14 @@
 
     <!-- Recording permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Foreground service permissions -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Log capture permission -->
+    <uses-permission android:name="android.permission.READ_LOGS" />
 
     <!-- Notification permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -46,12 +52,18 @@
             android:name=".HomeActivity"
             android:exported="false" />
 
-        <!-- Screen Recording Service -->
+        <!-- QA Snap Services -->
         <service
             android:name="io.codingskuy.qa_snap.service.ScreenRecordingService"
             android:exported="false"
             android:enabled="true"
             android:foregroundServiceType="mediaProjection" />
+
+        <service
+            android:name="io.codingskuy.qa_snap.service.LogCaptureService"
+            android:exported="false"
+            android:enabled="true"
+            android:foregroundServiceType="dataSync" />
 
         <!-- FileProvider for sharing recorded videos -->
         <provider
