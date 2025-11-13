@@ -4,38 +4,35 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import io.codingskuy.qa_snap.QASnapActivity
+import androidx.appcompat.app.AppCompatActivity
 import io.codingskuy.qa_snap.QASnapHelper
 import io.codingskuy.qa_snap.QASnapRecorder
 import io.codingskuy.qa_snap_demo.databinding.ActivityHomeBinding
 import java.io.File
 
 /**
- * HomeActivity - Main home screen with simplified QA Snap integration
+ * HomeActivity - Main home screen that connects to existing QA recording session
  *
- * This demonstrates how to interact with QA recording in progress using
- * the simplified helper approach.
+ * This demonstrates how to connect to an existing recording session
+ * without interfering with the ongoing recording.
  */
-class HomeActivity : QASnapActivity() {
+class HomeActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "HomeActivity"
     }
 
     private lateinit var binding: ActivityHomeBinding
-    private var isConnectedToExistingSession = false
+    private var existingRecorder: QASnapRecorder? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Allow cleanup on destroy since this is typically the final activity
-        shouldCleanupOnDestroy = true
-
         super.onCreate(savedInstanceState)
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         Log.d(TAG, "HomeActivity onCreate - setting up QA Snap integration")
 
-        // The QASnapActivity will handle setup, but we need to connect to existing session
+        // Connect to existing recording session without creating new one
         setupExistingRecordingSession()
 
         setupClickListeners()
@@ -45,32 +42,19 @@ class HomeActivity : QASnapActivity() {
     private fun setupExistingRecordingSession() {
         Log.d(TAG, "Checking for existing recording session")
 
-        // Check if there's already an active recording session
-        val existingRecorder = QASnapRecorder.getInstance()
+        // Get existing recorder instance directly to avoid listener conflicts
+        existingRecorder = QASnapRecorder.getInstance()
         val isRecordingActive = existingRecorder?.isRecording() ?: false
-        Log.d(TAG, "Existing recording session found: $isRecordingActive")
+        val isLogsActive = existingRecorder?.isCapturingLogs() ?: false
 
-        if (isRecordingActive) {
-            Log.d(TAG, "Active recording detected, will connect to existing session")
-            isConnectedToExistingSession = true
+        Log.d(TAG, "Existing recording session - Video: $isRecordingActive, Logs: $isLogsActive")
 
-            // Connect to existing session after QASnapActivity initializes
-            qaSnapHelper.connectToExistingSession()
+        if (isRecordingActive || isLogsActive) {
+            Log.d(TAG, "Active recording/logging detected, using direct recorder reference")
+            Log.d(TAG, "Will manage existing session without interfering with listeners")
         } else {
             Log.d(TAG, "No active recording found")
         }
-    }
-
-    // Override the QASnapActivity methods to handle existing session
-    override fun shouldAutoStartRecording(): Boolean {
-        // Don't auto-start since we're connecting to existing session
-        return false
-    }
-
-    override fun onQARecordingComplete(videoFile: File?, logFile: File?) {
-        Log.d(TAG, "QA recording completed in HomeActivity")
-        showCompletionDialog("QA Recording Complete!", videoFile, logFile)
-        updateStatus()
     }
 
     private fun setupClickListeners() {
@@ -143,7 +127,7 @@ class HomeActivity : QASnapActivity() {
     }
 
     private fun updateStatus() {
-        val isRecording = qaSnapHelper.isRecording()
+        val isRecording = existingRecorder?.isRecording() ?: false
 
         binding.tvRecordingStatus.text = when {
             isRecording -> "🔴📋 QA Recording Active (Video & Logs)"
@@ -160,7 +144,7 @@ class HomeActivity : QASnapActivity() {
     }
 
     private fun showStopRecordingDialog() {
-        val isRecording = qaSnapHelper.isRecording()
+        val isRecording = existingRecorder?.isRecording() ?: false
 
         if (!isRecording) {
             Toast.makeText(this, "No recording active to stop", Toast.LENGTH_SHORT).show()
@@ -171,7 +155,7 @@ class HomeActivity : QASnapActivity() {
             .setTitle("Stop QA Recording")
             .setMessage("Are you sure you want to stop QA recording? Both screen video and system logs will be saved to your device.")
             .setPositiveButton("Stop") { _, _ ->
-                qaSnapHelper.stopRecording()
+                existingRecorder?.stopRecording()
                 updateStatus()
             }
             .setNegativeButton("Continue", null)
@@ -203,9 +187,8 @@ class HomeActivity : QASnapActivity() {
     }
 
     private fun checkFileSystem() {
-        val recorder = qaSnapHelper.getRecorder()
-        val videoDir = recorder?.getOutputDirectory()
-        val logDir = recorder?.getLogOutputDirectory()
+        val videoDir = existingRecorder?.getOutputDirectory()
+        val logDir = existingRecorder?.getLogOutputDirectory()
 
         val videoFiles = videoDir?.listFiles()?.size ?: 0
         val logFiles = logDir?.listFiles()?.size ?: 0
@@ -223,7 +206,7 @@ class HomeActivity : QASnapActivity() {
             Directory Exists: ${logDir?.exists()}
             Directory Writable: ${logDir?.canWrite()}
             
-            Recording Status: ${qaSnapHelper.isRecording()}
+            Recording Status: ${existingRecorder?.isRecording()}
         """.trimIndent()
 
         AlertDialog.Builder(this)
