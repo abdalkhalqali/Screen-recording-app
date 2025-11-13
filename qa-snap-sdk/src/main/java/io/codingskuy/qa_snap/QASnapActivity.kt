@@ -1,6 +1,7 @@
 package io.codingskuy.qa_snap
 
 import android.os.Bundle
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import java.io.File
 
@@ -21,14 +22,32 @@ abstract class QASnapActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Log.d("QASnapActivity", "QASnapActivity onCreate() started")
+        Log.d("QASnapActivity", "shouldAutoStartRecording(): ${shouldAutoStartRecording()}")
+
         // Initialize QA Snap with auto-start (can be overridden)
+        Log.d("QASnapActivity", "Creating QASnapHelper with quickStart")
         qaSnapHelper = QASnapHelper.quickStart(this, shouldAutoStartRecording())
-            .onRecordingReady {
-                onQARecordingReady()
-            }
-            .onComplete { videoFile, logFile ->
-                onQARecordingComplete(videoFile, logFile)
-            }
+
+        Log.d("QASnapActivity", "Setting onRecordingReady callback")
+        qaSnapHelper.onRecordingReady {
+            Log.d("QASnapActivity", "onRecordingReady callback chain triggered")
+            onQARecordingReady()
+        }
+
+        Log.d("QASnapActivity", "Setting onRecordingStarted callback")
+        qaSnapHelper.onRecordingStarted {
+            Log.d("QASnapActivity", "onRecordingStarted callback chain triggered")
+            onQARecordingStarted()
+        }
+
+        Log.d("QASnapActivity", "Setting onComplete callback")
+        qaSnapHelper.onComplete { videoFile, logFile ->
+            Log.d("QASnapActivity", "onComplete callback chain triggered")
+            onQARecordingComplete(videoFile, logFile)
+        }
+
+        Log.d("QASnapActivity", "QASnapActivity onCreate() completed - all callbacks set")
     }
 
     override fun onRequestPermissionsResult(
@@ -38,6 +57,16 @@ abstract class QASnapActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         qaSnapHelper.handlePermissionResult(requestCode, grantResults)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Cleanup QASnapHelper and reset singleton instance
+        if (::qaSnapHelper.isInitialized) {
+            qaSnapHelper.cleanup()
+        }
+        // Reset QASnapRecorder singleton instance to allow fresh initialization
+        QASnapRecorder.resetInstance()
     }
 
     /**
@@ -52,6 +81,14 @@ abstract class QASnapActivity : AppCompatActivity() {
      */
     protected open fun onQARecordingReady() {
         // Default: do nothing, recording starts automatically
+    }
+
+    /**
+     * Called when QA recording actually starts (after media projection permission granted)
+     * Override this for custom behavior when recording begins
+     */
+    protected open fun onQARecordingStarted() {
+        // Default: do nothing
     }
 
     /**

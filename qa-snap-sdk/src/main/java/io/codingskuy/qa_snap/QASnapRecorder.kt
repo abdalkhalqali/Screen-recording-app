@@ -26,6 +26,7 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
 
     companion object {
         private var instance: QASnapRecorder? = null
+        private const val TAG = "QASnapRecorder"
 
         /**
          * Initialize QASnapRecorder with activity context
@@ -33,9 +34,25 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
          * @return QASnapRecorder instance
          */
         fun initialize(activity: AppCompatActivity): QASnapRecorder {
-            instance = QASnapRecorder(activity)
-            // Setup crash handler when initializing
-            setupCrashHandler(activity)
+            Log.d(TAG, "Initializing QASnapRecorder...")
+
+            // If instance exists but has different activity, reset it
+            if (instance != null && instance?.activity != activity) {
+                Log.d(TAG, "Activity changed, resetting instance")
+                instance?.cleanup()
+                instance = null
+            }
+
+            // Create new instance if needed
+            if (instance == null) {
+                instance = QASnapRecorder(activity)
+                // Setup crash handler when initializing
+                setupCrashHandler(activity)
+                Log.d(TAG, "QASnapRecorder initialized with new activity and instance set")
+            } else {
+                Log.d(TAG, "QASnapRecorder instance already exists for same activity")
+            }
+
             return instance!!
         }
 
@@ -43,7 +60,24 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
          * Get current instance
          * @return QASnapRecorder instance or null if not initialized
          */
-        fun getInstance(): QASnapRecorder? = instance
+        fun getInstance(): QASnapRecorder? {
+            Log.d(
+                TAG,
+                "getInstance() called - instance is ${if (instance != null) "available" else "null"}"
+            )
+            return instance
+        }
+
+        /**
+         * Reset singleton instance - used for cleanup during activity recreation
+         * This ensures fresh initialization when a new activity is created
+         */
+        fun resetInstance() {
+            Log.d(TAG, "Resetting QASnapRecorder singleton instance")
+            instance?.cleanup()
+            instance = null
+            Log.d(TAG, "QASnapRecorder instance reset completed")
+        }
 
         /**
          * Emergency stop recording - can be called from anywhere
@@ -88,14 +122,29 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
     private var recordingListener: RecordingListener? = null
 
     // Activity result launcher for media projection permission
-    private val mediaProjectionLauncher: ActivityResultLauncher<Intent> =
-        activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-                startRecordingService(result.data!!)
-            } else {
-                recordingListener?.onRecordingError("Media projection permission denied")
+    private var mediaProjectionLauncher: ActivityResultLauncher<Intent>? = null
+
+    init {
+        // Register ActivityResultLauncher in constructor to ensure it's always available
+        registerMediaProjectionLauncher()
+    }
+
+    private fun registerMediaProjectionLauncher() {
+        try {
+            mediaProjectionLauncher =
+                activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                    if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+                        startRecordingService(result.data!!)
+                    } else {
+                        recordingListener?.onRecordingError("Media projection permission denied")
+                    }
             }
+            Log.d(TAG, "MediaProjection launcher registered successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to register ActivityResultLauncher", e)
+            // Fallback: we'll handle this in startRecording with a different approach
         }
+    }
 
     /**
      * Set recording event listener
@@ -111,11 +160,15 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
      * This will request media projection permission if not already granted
      */
     fun startRecording() {
+        Log.d(TAG, "startRecording() called - current isRecording: $isRecording")
+
         if (isRecording) {
+            Log.w(TAG, "Recording is already in progress, calling error callback")
             recordingListener?.onRecordingError("Recording is already in progress")
             return
         }
 
+        Log.d(TAG, "Starting log capture with default QA settings")
         // Start log capture first (with default QA-friendly settings)
         startLogCaptureInternal(
             logLevel = "I", // Info level and above for QA testing
@@ -123,8 +176,22 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
             packageFilter = activity.packageName // Focus on current app
         )
 
+        Log.d(TAG, "Creating media projection intent")
         val mediaProjectionIntent = mediaProjectionManager.createScreenCaptureIntent()
-        mediaProjectionLauncher.launch(mediaProjectionIntent)
+        Log.d(TAG, "Launching media projection launcher")
+
+        if (mediaProjectionLauncher != null) {
+            mediaProjectionLauncher?.launch(mediaProjectionIntent)
+        } else {
+            Log.w(TAG, "MediaProjection launcher is null, attempting to re-register")
+            registerMediaProjectionLauncher()
+            if (mediaProjectionLauncher != null) {
+                mediaProjectionLauncher?.launch(mediaProjectionIntent)
+            } else {
+                Log.e(TAG, "Failed to register MediaProjection launcher, cannot start recording")
+                recordingListener?.onRecordingError("Failed to initialize MediaProjection launcher. Try restarting the app.")
+            }
+        }
     }
 
     /**
@@ -193,6 +260,8 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
     }
 
     private fun startRecordingService(data: Intent) {
+        Log.d(TAG, "startRecordingService called with data")
+
         val displayMetrics = DisplayMetrics()
         val windowManager = activity.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         windowManager.defaultDisplay.getMetrics(displayMetrics)
@@ -200,10 +269,7 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
         val height = displayMetrics.heightPixels
         val densityDpi = displayMetrics.densityDpi
 
-        Log.d(
-            "QASnapRecorder",
-            "Starting recording service with dimensions: ${width}x${height}, density: $densityDpi"
-        )
+        Log.d(TAG, "Screen dimensions: ${width}x${height}, density: $densityDpi")
 
         val serviceIntent = Intent(activity, ScreenRecordingService::class.java).apply {
             action = ScreenRecordingService.ACTION_START_RECORDING
@@ -213,13 +279,16 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
             putExtra(ScreenRecordingService.EXTRA_DENSITY_DPI, densityDpi)
         }
 
+        Log.d(TAG, "Starting ScreenRecordingService as foreground service")
         try {
             ContextCompat.startForegroundService(activity, serviceIntent)
             isRecording = true
-            Log.d("QASnapRecorder", "Recording service started, calling onRecordingStarted")
+            Log.d(TAG, "Service started successfully, isRecording set to true")
+            Log.d(TAG, "Calling onRecordingStarted callback")
             recordingListener?.onRecordingStarted()
+            Log.d(TAG, "onRecordingStarted callback completed")
         } catch (e: Exception) {
-            Log.e("QASnapRecorder", "Failed to start recording service", e)
+            Log.e(TAG, "Failed to start recording service: ${e.message}", e)
             isRecording = false
             recordingListener?.onRecordingError("Failed to start recording service: ${e.message}")
         }
@@ -229,21 +298,22 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
      * Internal method for service to notify recording stopped
      */
     internal fun notifyRecordingStopped(outputFile: File) {
-        Log.d(
-            "QASnapRecorder",
-            "Recording stopped notification received: ${outputFile.absolutePath}"
-        )
+        Log.d(TAG, "notifyRecordingStopped called with file: ${outputFile.absolutePath}")
+        Log.d(TAG, "Current recording listener: ${recordingListener != null}")
         isRecording = false
         recordingListener?.onRecordingStopped(outputFile)
+        Log.d(TAG, "Recording stopped notification completed")
     }
 
     /**
      * Internal method for service to notify recording error
      */
     internal fun notifyRecordingError(error: String) {
-        Log.e("QASnapRecorder", "Recording error notification received: $error")
+        Log.e(TAG, "notifyRecordingError called with error: $error")
+        Log.d(TAG, "Current recording listener: ${recordingListener != null}")
         isRecording = false
         recordingListener?.onRecordingError(error)
+        Log.d(TAG, "Recording error notification completed")
     }
 
     /**
@@ -337,7 +407,18 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
         }
 
         val mediaProjectionIntent = mediaProjectionManager.createScreenCaptureIntent()
-        mediaProjectionLauncher.launch(mediaProjectionIntent)
+        if (mediaProjectionLauncher != null) {
+            mediaProjectionLauncher?.launch(mediaProjectionIntent)
+        } else {
+            Log.w(TAG, "MediaProjection launcher is null, attempting to re-register")
+            registerMediaProjectionLauncher()
+            if (mediaProjectionLauncher != null) {
+                mediaProjectionLauncher?.launch(mediaProjectionIntent)
+            } else {
+                Log.e(TAG, "Failed to register MediaProjection launcher, cannot start recording")
+                recordingListener?.onRecordingError("Failed to initialize MediaProjection launcher. Try restarting the app.")
+            }
+        }
     }
 
     /**
@@ -464,5 +545,32 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
          * @param error Error message
          */
         fun onLogCaptureError(error: String)
+    }
+
+    private fun cleanup() {
+        Log.d(TAG, "Cleaning up QASnapRecorder instance...")
+
+        // Stop any ongoing recording
+        if (isRecording) {
+            Log.d(TAG, "Stopping ongoing recording during cleanup")
+            try {
+                // Use emergency stop to avoid activity dependency
+                emergencyStopRecording(activity)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping recording during cleanup", e)
+            }
+        }
+
+        // Reset recording state
+        isRecording = false
+        isCapturingLogs = false
+
+        // Clear callback listener
+        recordingListener = null
+
+        // Clear ActivityResultLauncher reference
+        mediaProjectionLauncher = null
+
+        Log.d(TAG, "QASnapRecorder cleanup completed")
     }
 }

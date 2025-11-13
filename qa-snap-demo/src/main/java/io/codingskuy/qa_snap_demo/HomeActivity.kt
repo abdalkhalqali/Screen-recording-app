@@ -1,198 +1,195 @@
 package io.codingskuy.qa_snap_demo
 
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import io.codingskuy.qa_snap.QASnapRecorder
+import io.codingskuy.qa_snap.QASnapHelper
 import io.codingskuy.qa_snap_demo.databinding.ActivityHomeBinding
 import java.io.File
 
 /**
- * HomeActivity - Main home screen where user can interact and end recording/log capture
+ * HomeActivity - Main home screen with simplified QA Snap integration
+ *
+ * This demonstrates how to interact with QA recording in progress using
+ * the simplified helper approach.
  */
 class HomeActivity : AppCompatActivity() {
 
+    companion object {
+        private const val TAG = "HomeActivity"
+    }
+
     private lateinit var binding: ActivityHomeBinding
-    private var qaSnapRecorder: QASnapRecorder? = null
+    private var qaSnapHelper: QASnapHelper? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Get QA Snap recorder instance
-        qaSnapRecorder = QASnapRecorder.getInstance()
+        Log.d(TAG, "HomeActivity onCreate - setting up QA Snap integration")
+
+        // Get helper instance if recording was started from MainActivity
+        // In a real app, you might pass this via intent or use a singleton
+        setupQASnapHelper()
 
         setupClickListeners()
         updateStatus()
-        setupRecordingListener()
+    }
+
+    private fun setupQASnapHelper() {
+        Log.d(TAG, "Setting up QASnapHelper")
+        // Create helper for this activity (will detect if recording is already in progress)
+        qaSnapHelper = QASnapHelper(this).apply {
+            // Don't auto-start since recording should already be running from MainActivity
+            initialize(autoStart = false)
+        }
+
+        // Set completion callback
+        qaSnapHelper?.onComplete { videoFile, logFile ->
+            Log.d(TAG, "QA recording completed in HomeActivity")
+            showCompletionDialog("QA Recording Complete!", videoFile, logFile)
+            updateStatus()
+        }
+
+        Log.d(TAG, "QASnapHelper setup completed")
     }
 
     private fun setupClickListeners() {
+        Log.d(TAG, "Setting up click listeners")
+
         binding.btnStopRecording.setOnClickListener {
+            Log.d(TAG, "Stop recording button clicked")
             showStopRecordingDialog()
         }
 
         binding.btnViewProfile.setOnClickListener {
-            Toast.makeText(this, "Profile feature coming soon!", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "View profile button clicked")
+            Toast.makeText(
+                this,
+                "Profile feature - Recording continues in background",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         binding.btnSettings.setOnClickListener {
-            Toast.makeText(this, "Settings feature coming soon!", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "Settings button clicked")
+            Toast.makeText(
+                this,
+                "Settings feature - Recording continues in background",
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         binding.btnActivity1.setOnClickListener {
+            Log.d(TAG, "Debug file system button clicked")
             checkFileSystem()
         }
 
         binding.btnActivity2.setOnClickListener {
-            Toast.makeText(this, "Activity 2 performed", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "Activity 2 button clicked")
+            Toast.makeText(this, "Activity 2 performed - Recorded!", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnActivity3.setOnClickListener {
-            Toast.makeText(this, "Activity 3 performed", Toast.LENGTH_SHORT).show()
+            Log.d(TAG, "Activity 3 button clicked")
+            Toast.makeText(this, "Activity 3 performed - Recorded!", Toast.LENGTH_SHORT).show()
         }
 
         // New log capture test buttons
         binding.btnLogTest1.setOnClickListener {
-            android.util.Log.d("QASnapDemo", "Test log message 1 - Debug level")
+            Log.d(TAG, "Log test 1 button clicked")
+            android.util.Log.d("QASnapDemo", "Test log message 1 - Debug level from HomeActivity")
             Toast.makeText(this, "Debug log generated", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnLogTest2.setOnClickListener {
-            android.util.Log.i("QASnapDemo", "Test log message 2 - Info level")
+            Log.d(TAG, "Log test 2 button clicked")
+            android.util.Log.i("QASnapDemo", "Test log message 2 - Info level from HomeActivity")
             Toast.makeText(this, "Info log generated", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnLogTest3.setOnClickListener {
-            android.util.Log.w("QASnapDemo", "Test log message 3 - Warning level")
+            Log.d(TAG, "Log test 3 button clicked")
+            android.util.Log.w("QASnapDemo", "Test log message 3 - Warning level from HomeActivity")
             Toast.makeText(this, "Warning log generated", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnLogError.setOnClickListener {
-            android.util.Log.e("QASnapDemo", "Test error log message")
+            Log.d(TAG, "Log error button clicked")
+            android.util.Log.e("QASnapDemo", "Test error log message from HomeActivity")
             Toast.makeText(this, "Error log generated", Toast.LENGTH_SHORT).show()
         }
-    }
 
-    private fun setupRecordingListener() {
-        qaSnapRecorder?.setRecordingListener(object : QASnapRecorder.RecordingListener {
-            override fun onRecordingStarted() {
-                runOnUiThread {
-                    Toast.makeText(
-                        this@HomeActivity,
-                        "Screen recording started",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    updateStatus()
-                }
-            }
-
-            override fun onRecordingStopped(outputFile: File) {
-                runOnUiThread {
-                    showCompletionDialog("Video Recording Complete!", outputFile, "video")
-                    updateStatus()
-                }
-            }
-
-            override fun onRecordingError(error: String) {
-                runOnUiThread {
-                    Toast.makeText(this@HomeActivity, "Recording Error: $error", Toast.LENGTH_LONG)
-                        .show()
-                    updateStatus()
-                }
-            }
-
-            override fun onLogCaptureStarted() {
-                runOnUiThread {
-                    Toast.makeText(this@HomeActivity, "Log capture started", Toast.LENGTH_SHORT)
-                        .show()
-                    updateStatus()
-                }
-            }
-
-            override fun onLogCaptureStopped(outputFile: File) {
-                runOnUiThread {
-                    showCompletionDialog("Log Capture Complete!", outputFile, "logs")
-                    updateStatus()
-                }
-            }
-
-            override fun onLogCaptureError(error: String) {
-                runOnUiThread {
-                    Toast.makeText(
-                        this@HomeActivity,
-                        "Log Capture Error: $error",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    updateStatus()
-                }
-            }
-        })
+        Log.d(TAG, "Click listeners setup completed")
     }
 
     private fun updateStatus() {
-        val isRecording = qaSnapRecorder?.isRecording() ?: false
-        val isCapturingLogs = qaSnapRecorder?.isCapturingLogs() ?: false
+        val isRecording = qaSnapHelper?.isRecording() ?: false
 
         binding.tvRecordingStatus.text = when {
-            isRecording && isCapturingLogs -> "🔴📋 QA Recording Active (Video & Logs)"
-            isRecording -> "🔴 Video Recording Active"
-            isCapturingLogs -> "📋 Log Capture Active"
+            isRecording -> "🔴📋 QA Recording Active (Video & Logs)"
             else -> "⭕ Ready to Record"
         }
 
-        binding.btnStopRecording.isEnabled = isRecording || isCapturingLogs
+        binding.btnStopRecording.isEnabled = isRecording
 
         // Update button text based on what's active
         binding.btnStopRecording.text = when {
-            isRecording && isCapturingLogs -> "🛑 Stop QA Recording"
-            isRecording -> "🛑 Stop Video Recording"
-            isCapturingLogs -> "🛑 Stop Log Capture"
-            else -> "🛑 Stop Recording"
+            isRecording -> "🛑 Stop QA Recording"
+            else -> "🛑 No Recording Active"
         }
     }
 
     private fun showStopRecordingDialog() {
-        val isRecording = qaSnapRecorder?.isRecording() ?: false
-        val isCapturingLogs = qaSnapRecorder?.isCapturingLogs() ?: false
+        val isRecording = qaSnapHelper?.isRecording() ?: false
 
-        val title = when {
-            isRecording && isCapturingLogs -> "Stop QA Recording"
-            isRecording -> "Stop Video Recording"
-            isCapturingLogs -> "Stop Log Capture"
-            else -> "Stop Recording"
-        }
-
-        val message = when {
-            isRecording && isCapturingLogs -> "Are you sure you want to stop QA recording? Both screen video and system logs will be saved to your device."
-            isRecording -> "Are you sure you want to stop video recording? The video file will be saved to your device."
-            isCapturingLogs -> "Are you sure you want to stop log capture? The log file will be saved to your device."
-            else -> "No active recording to stop."
+        if (!isRecording) {
+            Toast.makeText(this, "No recording active to stop", Toast.LENGTH_SHORT).show()
+            return
         }
 
         AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
+            .setTitle("Stop QA Recording")
+            .setMessage("Are you sure you want to stop QA recording? Both screen video and system logs will be saved to your device.")
             .setPositiveButton("Stop") { _, _ ->
-                qaSnapRecorder?.stopRecording() // This stops both video and logs
+                qaSnapHelper?.stopRecording()
+                updateStatus()
             }
             .setNegativeButton("Continue", null)
             .show()
     }
 
-    private fun showCompletionDialog(title: String, outputFile: File, fileType: String) {
+    private fun showCompletionDialog(title: String, videoFile: File?, logFile: File?) {
+        val message = buildString {
+            append("QA recording has been completed successfully!\n\n")
+
+            videoFile?.let {
+                append("📹 Video: ${it.name}\n")
+                append("📁 Size: ${it.length() / 1024} KB\n")
+                append("📍 Location: ${it.parent}\n\n")
+            }
+
+            logFile?.let {
+                append("📋 Logs: ${it.name}\n")
+                append("📁 Size: ${it.length() / 1024} KB\n")
+                append("📍 Location: ${it.parent}")
+            }
+        }
+
         AlertDialog.Builder(this)
             .setTitle(title)
-            .setMessage("Your $fileType has been saved successfully!\n\nFile: ${outputFile.name}\nLocation: ${outputFile.absolutePath}\nSize: ${outputFile.length() / 1024} KB")
+            .setMessage(message)
             .setPositiveButton("OK", null)
             .show()
     }
 
     private fun checkFileSystem() {
-        val videoDir = qaSnapRecorder?.getOutputDirectory()
-        val logDir = qaSnapRecorder?.getLogOutputDirectory()
+        val recorder = qaSnapHelper?.getRecorder()
+        val videoDir = recorder?.getOutputDirectory()
+        val logDir = recorder?.getLogOutputDirectory()
 
         val videoFiles = videoDir?.listFiles()?.size ?: 0
         val logFiles = logDir?.listFiles()?.size ?: 0
@@ -210,8 +207,7 @@ class HomeActivity : AppCompatActivity() {
             Directory Exists: ${logDir?.exists()}
             Directory Writable: ${logDir?.canWrite()}
             
-            Recording Status: ${qaSnapRecorder?.isRecording()}
-            Log Capture Status: ${qaSnapRecorder?.isCapturingLogs()}
+            Recording Status: ${qaSnapHelper?.isRecording()}
         """.trimIndent()
 
         AlertDialog.Builder(this)
@@ -225,6 +221,7 @@ class HomeActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        Log.d(TAG, "HomeActivity onResume - updating status")
         updateStatus()
     }
 }
