@@ -18,6 +18,7 @@ abstract class QASnapActivity : AppCompatActivity() {
 
     protected lateinit var qaSnapHelper: QASnapHelper
     private var autoStartRecording = true
+    protected var shouldCleanupOnDestroy = true  // Allow subclasses to control cleanup behavior
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +48,12 @@ abstract class QASnapActivity : AppCompatActivity() {
             onQARecordingComplete(videoFile, logFile)
         }
 
+        Log.d("QASnapActivity", "Setting onError callback")
+        qaSnapHelper.onError { error ->
+            Log.d("QASnapActivity", "onError callback chain triggered")
+            onQARecordingError(error)
+        }
+
         Log.d("QASnapActivity", "QASnapActivity onCreate() completed - all callbacks set")
     }
 
@@ -60,13 +67,20 @@ abstract class QASnapActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        // Cleanup QASnapHelper and reset singleton instance
-        if (::qaSnapHelper.isInitialized) {
-            qaSnapHelper.cleanup()
+        if (shouldCleanupOnDestroy) {
+            Log.d("QASnapActivity", "Performing normal cleanup")
+            super.onDestroy()
+            // Cleanup QASnapHelper and reset singleton instance
+            if (::qaSnapHelper.isInitialized) {
+                qaSnapHelper.cleanup()
+            }
+            // Reset QASnapRecorder singleton instance to allow fresh initialization
+            QASnapRecorder.resetInstance()
+        } else {
+            Log.d("QASnapActivity", "Skipping QA recording cleanup - recording continues")
+            super.onDestroy()
+            // Don't cleanup - let recording continue
         }
-        // Reset QASnapRecorder singleton instance to allow fresh initialization
-        QASnapRecorder.resetInstance()
     }
 
     /**
@@ -96,6 +110,14 @@ abstract class QASnapActivity : AppCompatActivity() {
      * Override this to handle completion (e.g., upload files, show dialog, etc.)
      */
     protected open fun onQARecordingComplete(videoFile: File?, logFile: File?) {
+        // Default: do nothing
+    }
+
+    /**
+     * Called when an error occurs during QA recording (including permission denial)
+     * Override this to handle errors gracefully
+     */
+    protected open fun onQARecordingError(error: String) {
         // Default: do nothing
     }
 

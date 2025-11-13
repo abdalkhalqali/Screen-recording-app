@@ -138,7 +138,7 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
                     } else {
                         recordingListener?.onRecordingError("Media projection permission denied")
                     }
-            }
+                }
             Log.d(TAG, "MediaProjection launcher registered successfully")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register ActivityResultLauncher", e)
@@ -168,12 +168,10 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
             return
         }
 
-        Log.d(TAG, "Starting log capture with default QA settings")
-        // Start log capture first (with default QA-friendly settings)
-        startLogCaptureInternal(
-            logLevel = "I", // Info level and above for QA testing
-            tagFilter = null, // Capture all tags
-            packageFilter = activity.packageName // Focus on current app
+        // DON'T start log capture here - wait for MediaProjection permission first
+        Log.d(
+            TAG,
+            "Creating media projection intent - log capture will start after permission granted"
         )
 
         Log.d(TAG, "Creating media projection intent")
@@ -287,6 +285,14 @@ class QASnapRecorder private constructor(private val activity: AppCompatActivity
             Log.d(TAG, "Calling onRecordingStarted callback")
             recordingListener?.onRecordingStarted()
             Log.d(TAG, "onRecordingStarted callback completed")
+
+            // Start log capture here after MediaProjection permission granted
+            Log.d(TAG, "Starting log capture with default QA settings")
+            startLogCaptureInternal(
+                logLevel = "I", // Info level and above for QA testing
+                tagFilter = null, // Capture all tags
+                packageFilter = activity.packageName // Focus on current app
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start recording service: ${e.message}", e)
             isRecording = false

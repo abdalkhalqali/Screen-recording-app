@@ -45,6 +45,7 @@ class QASnapHelper(private val activity: AppCompatActivity) {
     private var onRecordingReady: (() -> Unit)? = null
     private var onRecordingStarted: (() -> Unit)? = null
     private var onComplete: ((videoFile: File?, logFile: File?) -> Unit)? = null
+    private var onError: ((error: String) -> Unit)? = null
     private var autoStartAfterPermissions = true
     private var isInitialized = false
 
@@ -122,6 +123,15 @@ class QASnapHelper(private val activity: AppCompatActivity) {
     }
 
     /**
+     * Set callback for when recording encounters an error
+     */
+    fun onError(callback: (error: String) -> Unit): QASnapHelper {
+        Log.d(TAG, "onError callback set")
+        onError = callback
+        return this
+    }
+
+    /**
      * Check if all callbacks are set and initialize if ready
      */
     private fun checkAndInitialize() {
@@ -191,6 +201,11 @@ class QASnapHelper(private val activity: AppCompatActivity) {
      * Check if currently recording
      */
     fun isRecording(): Boolean {
+        // If we don't have a recorder reference, try to get existing instance
+        if (qaSnapRecorder == null) {
+            qaSnapRecorder = QASnapRecorder.getInstance()
+        }
+
         val isRecording = qaSnapRecorder?.isRecording() ?: false
         Log.d(TAG, "isRecording(): $isRecording")
         return isRecording
@@ -212,6 +227,7 @@ class QASnapHelper(private val activity: AppCompatActivity) {
         onRecordingReady = null
         onRecordingStarted = null
         onComplete = null
+        onError = null
 
         // Stop any ongoing recording
         if (qaSnapRecorder?.isRecording() == true) {
@@ -337,6 +353,7 @@ class QASnapHelper(private val activity: AppCompatActivity) {
             override fun onRecordingError(error: String) {
                 Log.e(TAG, "Recording error: $error")
                 Toast.makeText(activity, "Recording error: $error", Toast.LENGTH_LONG).show()
+                onError?.invoke(error)
             }
 
             override fun onLogCaptureStarted() {
@@ -355,13 +372,14 @@ class QASnapHelper(private val activity: AppCompatActivity) {
             override fun onLogCaptureError(error: String) {
                 Log.e(TAG, "Log capture error: $error")
                 Toast.makeText(activity, "Log capture error: $error", Toast.LENGTH_SHORT).show()
+                onError?.invoke(error)
             }
         })
 
         Log.d(TAG, "Default listener setup completed")
         Log.d(
             TAG,
-            "Available callbacks - onRecordingReady: ${onRecordingReady != null}, onRecordingStarted: ${onRecordingStarted != null}, onComplete: ${onComplete != null}"
+            "Available callbacks - onRecordingReady: ${onRecordingReady != null}, onRecordingStarted: ${onRecordingStarted != null}, onComplete: ${onComplete != null}, onError: ${onError != null}"
         )
     }
 
@@ -372,5 +390,29 @@ class QASnapHelper(private val activity: AppCompatActivity) {
             Log.d(TAG, "Calling completion callback")
             onComplete?.invoke(video, logs)
         }
+    }
+
+    /**
+     * Connect to existing QASnapRecorder instance without initializing new session
+     * Use this when you want to manage an already active recording from another activity
+     */
+    fun connectToExistingSession(): QASnapHelper {
+        Log.d(TAG, "Connecting to existing QASnapRecorder session")
+
+        // Get existing instance
+        qaSnapRecorder = QASnapRecorder.getInstance()
+
+        if (qaSnapRecorder != null) {
+            Log.d(TAG, "Connected to existing QASnapRecorder instance")
+            Log.d(TAG, "Recording active: ${qaSnapRecorder?.isRecording()}")
+            Log.d(TAG, "Logs active: ${qaSnapRecorder?.isCapturingLogs()}")
+
+            // Setup listener for the existing session
+            setupDefaultListener()
+        } else {
+            Log.w(TAG, "No existing QASnapRecorder instance found")
+        }
+
+        return this
     }
 }

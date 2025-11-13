@@ -2,14 +2,20 @@ package io.codingskuy.qa_snap_demo
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import io.codingskuy.qa_snap.QASnapRecorder
 import io.codingskuy.qa_snap_demo.databinding.ActivitySignInBinding
 
 /**
  * SignInActivity - User authentication screen
  */
 class SignInActivity : AppCompatActivity() {
+
+    companion object {
+        private const val TAG = "SignInActivity"
+    }
 
     private lateinit var binding: ActivitySignInBinding
 
@@ -18,7 +24,26 @@ class SignInActivity : AppCompatActivity() {
         binding = ActivitySignInBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        Log.d(TAG, "SignInActivity onCreate")
+
+        // Check if recording is active from previous activity
+        checkRecordingStatus()
+
         setupClickListeners()
+    }
+
+    private fun checkRecordingStatus() {
+        val recorder = QASnapRecorder.getInstance()
+        val isRecording = recorder?.isRecording() ?: false
+        Log.d(TAG, "Recording status: $isRecording")
+
+        if (isRecording) {
+            Log.d(TAG, "Recording is active, continuing in background")
+            Toast.makeText(this, "📹 QA Recording continues in background", Toast.LENGTH_SHORT)
+                .show()
+        } else {
+            Log.d(TAG, "No active recording found")
+        }
     }
 
     private fun setupClickListeners() {

@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import io.codingskuy.qa_snap.QASnapActivity
 import java.io.File
 
@@ -29,6 +30,9 @@ class MainActivity : QASnapActivity() {
     private var isRecordingStarted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Prevent cleanup on destroy so recording continues to next activity
+        shouldCleanupOnDestroy = false
+
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -61,9 +65,8 @@ class MainActivity : QASnapActivity() {
         Log.d(TAG, "Calling startQARecording() to trigger MediaProjection permission")
         startQARecording()
 
-        // ALWAYS start navigation timer - don't wait for recording
-        Log.d(TAG, "Starting navigation timer immediately")
-        startNavigationTimer()
+        // DON'T start navigation timer here - wait for user to click Start in MediaProjection popup
+        Log.d(TAG, "Waiting for user to grant MediaProjection permission before navigation")
     }
 
     // Called when QA recording actually starts
@@ -73,10 +76,11 @@ class MainActivity : QASnapActivity() {
         Log.d(TAG, "Activity finishing: $isFinishing")
         isRecordingStarted = true
         Toast.makeText(this, "✅ QA Recording is now active!", Toast.LENGTH_SHORT).show()
-        navigateToSignIn()
 
-        // Recording has started successfully, we can proceed with normal flow
-        // Navigation will happen via the navigation timer
+        // NOW start navigation timer after user clicked Start in MediaProjection popup
+        Log.d(TAG, "Recording started, now starting navigation timer")
+        startNavigationTimer()
+
         Log.d(TAG, "Recording started successfully, navigation timer will handle navigation")
     }
 
@@ -99,13 +103,16 @@ class MainActivity : QASnapActivity() {
         // showDetailedCompletionDialog(videoFile, logFile)
     }
 
-    private fun onQARecordingError(error: String) {
+    override fun onQARecordingError(error: String) {
         Log.e(TAG, "QA Recording error: $error")
         Toast.makeText(this, "Recording error: $error", Toast.LENGTH_LONG).show()
 
-        // Even if recording fails, continue with app flow after splash delay
+        // If recording fails or user cancels MediaProjection, continue with app flow
         if (!hasNavigated) {
-            Log.d(TAG, "Recording failed, but continuing with navigation after delay")
+            Log.d(
+                TAG,
+                "Recording failed or cancelled, but continuing with navigation after short delay"
+            )
             startNavigationTimer()
         }
     }
@@ -168,10 +175,5 @@ class MainActivity : QASnapActivity() {
         val isRecording = isQARecording()
         Log.d(TAG, "Recording status check: $isRecording")
         Toast.makeText(this, "Recording status: $isRecording", Toast.LENGTH_SHORT).show()
-    }
-
-    override fun onDestroy() {
-        Log.d(TAG, "MainActivity onDestroy")
-        super.onDestroy()
     }
 }
