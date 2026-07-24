@@ -193,11 +193,11 @@ public class ScreenCaptureEngine {
         // Pre-allocate buffers for max possible frame size
         int frameSize = displayWidth * displayHeight * 3 / 2;
         yuvFrameBuffer = new byte[frameSize];
-        int cropW = (int) (displayWidth * lastNormalizedRegion.width());
-        int cropH = (int) (displayHeight * lastNormalizedRegion.height());
-        if (cropW % 2 != 0) cropW++;
-        if (cropH % 2 != 0) cropH++;
-        croppedYuvBuffer = new byte[cropW * cropH * 3 / 2];
+        int rawCropW = (int) (displayWidth * lastNormalizedRegion.width());
+        int rawCropH = (int) (displayHeight * lastNormalizedRegion.height());
+        final int finalCropW = (rawCropW % 2 != 0) ? rawCropW + 1 : rawCropW;
+        final int finalCropH = (rawCropH % 2 != 0) ? rawCropH + 1 : rawCropH;
+        croppedYuvBuffer = new byte[finalCropW * finalCropH * 3 / 2];
 
         videoReader.setOnImageAvailableListener(reader -> {
             if (!isVideoCapturing && isEncoding) { stopEncoding(); return; }
@@ -209,7 +209,7 @@ public class ScreenCaptureEngine {
                         byte[] croppedYuv = cropYuv420(yuvData, displayWidth, displayHeight,
                                 lastNormalizedRegion, croppedYuvBuffer);
                         if (croppedYuv != null) {
-                            encodeYuvFrame(croppedYuv, cropW, cropH);
+                            encodeYuvFrame(croppedYuv, finalCropW, finalCropH);
                         }
                     }
                 }
