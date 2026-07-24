@@ -183,6 +183,7 @@ public class ScreenCaptureEngine {
 
     public boolean isAudioEnabled() {
         return audioSource != AudioSource.NONE;
+    }
 
     /**
      * Start video recording of the selected region
@@ -203,16 +204,23 @@ public class ScreenCaptureEngine {
         }
 
         // Start audio recording based on source
-        if (audioSource == AudioSource.EXTERNAL || audioSource == AudioSource.BOTH) {
-            startAudioRecording(AudioSource.EXTERNAL);
-        }
-        if (audioSource == AudioSource.INTERNAL || audioSource == AudioSource.BOTH) {
+        if (audioSource == AudioSource.EXTERNAL) {
+            startExternalAudioRecording();
+        } else if (audioSource == AudioSource.INTERNAL) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startInternalAudioRecording();
             } else {
                 Log.w(TAG, "Internal audio requires Android 10+");
                 if (listener != null)
                     listener.onCaptureError("الصوت الداخلي يحتاج Android 10 أو أحدث");
+            }
+        } else if (audioSource == AudioSource.BOTH) {
+            // Start both sources and mix them into one audio track
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startMixedAudioRecording();
+            } else {
+                Log.w(TAG, "BOTH audio requires Android 10+");
+                startExternalAudioRecording(); // Fallback to mic only
             }
         }
 
@@ -480,8 +488,8 @@ public class ScreenCaptureEngine {
         videoCodec.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         videoCodec.start();
 
-        // Initialize audio encoder if enabled
-        if (recordAudio) {
+        // Initialize audio encoder if any audio source is enabled
+        if (isAudioEnabled()) {
             initAudioEncoder();
         }
 
@@ -540,9 +548,9 @@ public class ScreenCaptureEngine {
     }
 
     /**
-     * Start audio recording from microphone (EXTERNAL source)
+     * Start external (mic) audio recording
      */
-    private void startAudioRecording(AudioSource source) {
+    private void startExternalAudioRecording() {
         if (audioRecord != null) return;
 
         int sampleRate = audioConfig.getSampleRateValue();
@@ -552,18 +560,15 @@ public class ScreenCaptureEngine {
                 AudioFormat.ENCODING_PCM_16BIT
         );
 
-        // Apply noise suppression if enabled
-        int audioSource = MediaRecorder.AudioSource.MIC;
+        int audioRecorderSource = MediaRecorder.AudioSource.MIC;
         if (audioConfig.getNoiseSuppression().enabled) {
-            if (!audioConfig.getNoiseSuppression().aggressive) {
-                audioSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION;
-            } else {
-                audioSource = MediaRecorder.AudioSource.CAMCORDER;
-            }
+            audioRecorderSource = audioConfig.getNoiseSuppression().aggressive
+                    ? MediaRecorder.AudioSource.CAMCORDER
+                    : MediaRecorder.AudioSource.VOICE_COMMUNICATION;
         }
 
         audioRecord = new AudioRecord(
-                audioSource,
+                audioRecorderSource,
                 sampleRate,
                 AudioFormat.CHANNEL_IN_MONO,
                 AudioFormat.ENCODING_PCM_16BIT,
@@ -598,14 +603,13 @@ public class ScreenCaptureEngine {
                     encodeAudio(audioBuffer, bytesRead);
                 }
             }
-
             stopExternalAudio();
         }, "ExternalAudioThread");
         audioThread.start();
     }
 
     /**
-     * Start internal (device) audio recording using AudioPlaybackCapture (Android 10+)
+     * Start internal (device) audio recording (Android 10+)
      */
     private void startInternalAudioRecording() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
@@ -617,7 +621,7 @@ public class ScreenCaptureEngine {
                 AudioFormat.ENCODING_PCM_16BIT
         );
 
-        AudioRecord internalRecord = new AudioRecord(
+        audioRecord = new AudioRecord(
                 MediaRecorder.AudioSource.REMOTE_SUBMIX,
                 sampleRate,
                 AudioFormat.CHANNEL_IN_MONO,
@@ -625,15 +629,16 @@ public class ScreenCaptureEngine {
                 Math.max(bufferSize, 4096)
         );
 
-        if (internalRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+        if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
             Log.w(TAG, "Internal audio not available on this device");
+            audioRecord = null;
             return;
         }
 
         isAudioRecording.set(true);
-        internalRecord.startRecording();
+        audioRecord.startRecording();
 
-        Thread internalThread = new Thread(() -> {
+        audioThread = new Thread(() -> {
             ByteBuffer audioBuffer = ByteBuffer.allocateDirect(4096);
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
 
@@ -644,7 +649,7 @@ public class ScreenCaptureEngine {
                 }
 
                 audioBuffer.clear();
-                int bytesRead = internalRecord.read(audioBuffer, 4096);
+                int bytesRead = audioRecord.read(audioBuffer, 4096);
 
                 if (bytesRead > 0 && audioCodec != null) {
                     audioBuffer.position(bytesRead);
@@ -652,14 +657,130 @@ public class ScreenCaptureEngine {
                     encodeAudio(audioBuffer, bytesRead);
                 }
             }
+            stopExternalAudio();
+        }, "InternalAudioThread");
+        audioThread.start();
+    }
+
+    /**
+     * Start BOTH external (mic) AND internal (REMOTE_SUBMIX) with PCM mixing
+     * Mixes both audio sources together into a single audio track
+     */
+    private void startMixedAudioRecording() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
+
+        int sampleRate = audioConfig.getSampleRateValue();
+        int bufferSize = AudioRecord.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+        );
+
+        // Create EXTERNAL (mic) AudioRecord
+        int micSource = MediaRecorder.AudioSource.MIC;
+        if (audioConfig.getNoiseSuppression().enabled) {
+            micSource = audioConfig.getNoiseSuppression().aggressive
+                    ? MediaRecorder.AudioSource.CAMCORDER
+                    : MediaRecorder.AudioSource.VOICE_COMMUNICATION;
+        }
+        AudioRecord micRecord = new AudioRecord(
+                micSource, sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                Math.max(bufferSize, 4096)
+        );
+
+        // Create INTERNAL (REMOTE_SUBMIX) AudioRecord
+        AudioRecord internalRecord = new AudioRecord(
+                MediaRecorder.AudioSource.REMOTE_SUBMIX,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                Math.max(bufferSize, 4096)
+        );
+
+        if (micRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+            Log.w(TAG, "Mic AudioRecord failed, falling back to internal only");
+            micRecord.release();
+            startInternalAudioRecording();
+            return;
+        }
+        if (internalRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+            Log.w(TAG, "Internal AudioRecord not available, falling back to mic only");
+            internalRecord.release();
+            startExternalAudioRecording();
+            return;
+        }
+
+        isAudioRecording.set(true);
+        micRecord.startRecording();
+        internalRecord.startRecording();
+
+        audioThread = new Thread(() -> {
+            ByteBuffer micBuffer = ByteBuffer.allocateDirect(4096);
+            ByteBuffer internalBuffer = ByteBuffer.allocateDirect(4096);
+            ByteBuffer mixedBuffer = ByteBuffer.allocateDirect(4096);
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
+
+            while (isAudioRecording.get() && isVideoCapturing) {
+                if (isPaused) {
+                    try { Thread.sleep(50); } catch (InterruptedException e) { break; }
+                    continue;
+                }
+
+                micBuffer.clear();
+                internalBuffer.clear();
+                mixedBuffer.clear();
+
+                int micRead = micRecord.read(micBuffer, 4096);
+                int internalRead = internalRecord.read(internalBuffer, 4096);
+
+                if (micRead > 0 && internalRead > 0 && audioCodec != null) {
+                    int bytesToMix = Math.min(micRead, internalRead) / 2 * 2; // Even number
+                    mixedBuffer.limit(bytesToMix);
+
+                    micBuffer.flip();
+                    internalBuffer.flip();
+
+                    // PCM 16-bit mixing (average to prevent clipping)
+                    for (int i = 0; i < bytesToMix / 2; i++) {
+                        short micSample = micBuffer.getShort();
+                        short internalSample = internalBuffer.getShort();
+                        // Average the two samples to prevent clipping
+                        short mixed = (short) ((micSample + internalSample) / 2);
+                        mixedBuffer.putShort(mixed);
+                    }
+
+                    mixedBuffer.flip();
+                    encodeAudio(mixedBuffer, bytesToMix);
+
+                } else if (micRead > 0 && audioCodec != null) {
+                    // Only mic data available
+                    micBuffer.position(micRead);
+                    micBuffer.flip();
+                    encodeAudio(micBuffer, micRead);
+                } else if (internalRead > 0 && audioCodec != null) {
+                    // Only internal data available
+                    internalBuffer.position(internalRead);
+                    internalBuffer.flip();
+                    encodeAudio(internalBuffer, internalRead);
+                }
+            }
+
+            // Cleanup both records
+            try {
+                if (micRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING)
+                    micRecord.stop();
+            } catch (Exception ignored) {}
+            micRecord.release();
 
             try {
                 if (internalRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING)
                     internalRecord.stop();
             } catch (Exception ignored) {}
             internalRecord.release();
-        }, "InternalAudioThread");
-        internalThread.start();
+        }, "MixedAudioThread");
+        audioThread.start();
     }
 
     /**
@@ -698,7 +819,6 @@ public class ScreenCaptureEngine {
     private void stopAudioCapture() {
         isAudioRecording.set(false);
         stopExternalAudio();
-        // Audio codec is stopped in stopEncoding()
         audioThread = null;
     }
 
