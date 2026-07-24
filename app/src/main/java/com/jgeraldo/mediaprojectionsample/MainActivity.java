@@ -70,7 +70,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout captureInfoPanel;
     private TextView captureInfoText;
     private MaterialCardView controlPanel;
-    private ImageButton btnScreenshotQuick, btnSettings;
+    private ImageButton btnScreenshotQuick;
     private com.google.android.material.button.MaterialButton btnMic;
     private com.google.android.material.button.MaterialButton btnSettings;
     private ScreenCaptureEngine.AudioSource audioSourceMode = ScreenCaptureEngine.AudioSource.EXTERNAL;
