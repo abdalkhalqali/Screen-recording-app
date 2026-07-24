@@ -724,7 +724,7 @@ public class ScreenCaptureEngine {
     private void createVirtualDisplay(Surface surface, int width, int height) {
         releaseVirtualDisplay();
         virtualDisplay = mediaProjection.createVirtualDisplay("RegionCapture",
-                width, height, DisplayManager.DEFAULT_DISPLAY_DPI,
+                width, height, 160, // default MDPI density
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 surface, null, backgroundHandler);
     }

@@ -295,7 +295,7 @@ public class FloatingControlService extends Service {
         return new Notification.Builder(this, "floating_control")
                 .setContentTitle("مسجل الشاشة")
                 .setContentText(isPaused ? "⏸️ تم الإيقاف المؤقت" : "🎬 جاري التسجيل...")
-                .setSmallIcon(android.R.drawable.ic_menu_record)
+                .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .setOngoing(true)
                 .build();
     }

@@ -128,7 +128,6 @@ public class MainActivity extends AppCompatActivity {
         // Init views
         mSurfaceView = findViewById(R.id.surface);
         regionOverlay = findViewById(R.id.regionOverlay);
-        overlayContainer = findViewById(R.id.overlayContainer);
         mButtonToggle = findViewById(R.id.button);
         modeToggleGroup = findViewById(R.id.modeToggle);
         captureInfoPanel = findViewById(R.id.captureInfoPanel);
