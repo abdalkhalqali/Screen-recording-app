@@ -121,6 +121,14 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         try {
         setContentView(R.layout.activity_main);
+        } catch (Exception e) {
+            Log.e(TAG, "LAYOUT INFLATION FAILED: " + e, e);
+            String msg = e.getMessage();
+            if (msg == null) msg = e.getClass().getSimpleName();
+            Toast.makeText(this, "🔴 خطأ في تحميل الواجهة: " + msg, Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
         mHandler = new Handler(Looper.getMainLooper());
 
         // Register ALL activity result launchers HERE (before STARTED state)
@@ -258,11 +266,6 @@ public class MainActivity extends AppCompatActivity {
 
         updateCaptureInfo();
         mHandler.postDelayed(() -> checkAllPermissionsAndUpdateUI(), 500);
-        } catch (Exception e) {
-            Log.e(TAG, "FATAL in onCreate: " + e.getMessage(), e);
-            Toast.makeText(this, "خطأ في بدء التطبيق: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            finish();
-        }
     }
 
     @Override
