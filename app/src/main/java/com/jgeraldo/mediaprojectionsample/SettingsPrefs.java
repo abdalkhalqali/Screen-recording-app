@@ -167,12 +167,18 @@ public class SettingsPrefs {
 
         if (sampleRateOrd < 0) return new AudioConfig(); // default
 
-        AudioConfig.SampleRate sr = AudioConfig.SampleRate.values()[
-                Math.min(sampleRateOrd, AudioConfig.SampleRate.values().length - 1)];
-        AudioConfig.AudioQuality q = AudioConfig.AudioQuality.values()[
-                Math.min(qualityOrd, AudioConfig.AudioQuality.values().length - 1)];
-        AudioConfig.NoiseSuppression ns = AudioConfig.NoiseSuppression.values()[
-                Math.min(noiseOrd, AudioConfig.NoiseSuppression.values().length - 1)];
+        AudioConfig.SampleRate sr = EnumUtils.getSafeEnumValue(
+                AudioConfig.SampleRate.values(),
+                sampleRateOrd,
+                AudioConfig.SampleRate.RATE_44100);
+        AudioConfig.AudioQuality q = EnumUtils.getSafeEnumValue(
+                AudioConfig.AudioQuality.values(),
+                qualityOrd,
+                AudioConfig.AudioQuality.HIGH);
+        AudioConfig.NoiseSuppression ns = EnumUtils.getSafeEnumValue(
+                AudioConfig.NoiseSuppression.values(),
+                noiseOrd,
+                AudioConfig.NoiseSuppression.OFF);
 
         return new AudioConfig(sr, q, ns);
     }
@@ -198,14 +204,22 @@ public class SettingsPrefs {
 
         if (frameRateOrd < 0) return new VideoConfig(); // default
 
-        VideoConfig.FrameRate fr = VideoConfig.FrameRate.values()[
-                Math.min(frameRateOrd, VideoConfig.FrameRate.values().length - 1)];
-        VideoConfig.VideoQuality q = VideoConfig.VideoQuality.values()[
-                Math.min(qualityOrd, VideoConfig.VideoQuality.values().length - 1)];
-        VideoConfig.IFrameInterval ifi = VideoConfig.IFrameInterval.values()[
-                Math.min(iFrameOrd, VideoConfig.IFrameInterval.values().length - 1)];
-        VideoConfig.CodecProfile cp = VideoConfig.CodecProfile.values()[
-                Math.min(codecOrd, VideoConfig.CodecProfile.values().length - 1)];
+        VideoConfig.FrameRate fr = EnumUtils.getSafeEnumValue(
+                VideoConfig.FrameRate.values(),
+                frameRateOrd,
+                VideoConfig.FrameRate.FPS_30);
+        VideoConfig.VideoQuality q = EnumUtils.getSafeEnumValue(
+                VideoConfig.VideoQuality.values(),
+                qualityOrd,
+                VideoConfig.VideoQuality.HIGH);
+        VideoConfig.IFrameInterval ifi = EnumUtils.getSafeEnumValue(
+                VideoConfig.IFrameInterval.values(),
+                iFrameOrd,
+                VideoConfig.IFrameInterval.ONE_SECOND);
+        VideoConfig.CodecProfile cp = EnumUtils.getSafeEnumValue(
+                VideoConfig.CodecProfile.values(),
+                codecOrd,
+                VideoConfig.CodecProfile.HIGH);
 
         return new VideoConfig(fr, q, ifi, cp);
     }

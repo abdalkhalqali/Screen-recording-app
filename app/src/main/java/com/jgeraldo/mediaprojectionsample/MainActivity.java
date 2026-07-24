@@ -207,12 +207,16 @@ public class MainActivity extends AppCompatActivity {
         });
         modeToggleGroup.check(R.id.modeBoth);
 
-        // Restore saved capture mode
+        // Restore saved capture mode safely
         int savedMode = settingsPrefs.getCaptureMode(2);
         if (savedMode == 0) modeToggleGroup.check(R.id.modeScreenshot);
         else if (savedMode == 1) modeToggleGroup.check(R.id.modeVideo);
         else modeToggleGroup.check(R.id.modeBoth);
-        currentMode = CaptureMode.values()[savedMode];
+        if (savedMode >= 0 && savedMode < CaptureMode.values().length) {
+            currentMode = CaptureMode.values()[savedMode];
+        } else {
+            currentMode = CaptureMode.BOTH;
+        }
 
         // Main button
         mButtonToggle.setOnClickListener(view -> {
@@ -307,15 +311,21 @@ public class MainActivity extends AppCompatActivity {
         audioConfig = settingsPrefs.loadAudioConfig();
         videoConfig = settingsPrefs.loadVideoConfig();
         int apOrd = settingsPrefs.getAutoPauseMode(ScreenCaptureEngine.AutoPauseMode.OFF.ordinal());
-        autoPauseMode = ScreenCaptureEngine.AutoPauseMode.values()[
-                Math.min(apOrd, ScreenCaptureEngine.AutoPauseMode.values().length - 1)];
+        autoPauseMode = EnumUtils.getSafeEnumValue(
+                ScreenCaptureEngine.AutoPauseMode.values(),
+                apOrd,
+                ScreenCaptureEngine.AutoPauseMode.OFF);
         int sourceOrd = settingsPrefs.getAudioSource(ScreenCaptureEngine.AudioSource.EXTERNAL.ordinal());
-        audioSourceMode = ScreenCaptureEngine.AudioSource.values()[
-                Math.min(sourceOrd, ScreenCaptureEngine.AudioSource.values().length - 1)];
+        audioSourceMode = EnumUtils.getSafeEnumValue(
+                ScreenCaptureEngine.AudioSource.values(),
+                sourceOrd,
+                ScreenCaptureEngine.AudioSource.EXTERNAL);
 
         int resOrd = settingsPrefs.getVideoResolution(SettingsPrefs.VideoResolution.RES_720P.ordinal());
-        currentResolution = SettingsPrefs.VideoResolution.values()[
-                Math.min(resOrd, SettingsPrefs.VideoResolution.values().length - 1)];
+        currentResolution = EnumUtils.getSafeEnumValue(
+                SettingsPrefs.VideoResolution.values(),
+                resOrd,
+                SettingsPrefs.VideoResolution.RES_720P);
         displayWidth = currentResolution.width;
         displayHeight = currentResolution.height;
 
