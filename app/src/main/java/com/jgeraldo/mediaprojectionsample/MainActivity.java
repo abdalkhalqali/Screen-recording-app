@@ -119,8 +119,40 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        try {
         setContentView(R.layout.activity_main);
         mHandler = new Handler(Looper.getMainLooper());
+
+        // Register ALL activity result launchers HERE (before STARTED state)
+        requestPermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), isGranted -> {
+                    checkAllPermissionsAndUpdateUI();
+                    if (isGranted) Log.d(TAG, "Permission granted");
+                });
+
+        overlaySettingsLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(), result ->
+                        checkAllPermissionsAndUpdateUI());
+
+        startMediaProjectionActivity = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(), result -> {
+                    int resultCode = result.getResultCode();
+                    if (resultCode == Activity.RESULT_OK) {
+                        Intent data = result.getData();
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                            MediaProjectionManager pm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                            mMediaProjection = pm.getMediaProjection(resultCode, data);
+                            if (mMediaProjection != null) startScreenCapture();
+                        } else {
+                            try {
+                                Intent si = new Intent(this, MyMediaProjectionService.class);
+                                si.putExtra("resultCode", resultCode);
+                                si.putExtra("data", data);
+                                ContextCompat.startForegroundService(this, si);
+                            } catch (RuntimeException e) { Log.w(TAG, "Error: " + e.getMessage()); }
+                        }
+                    } else Toast.makeText(this, getString(R.string.permission_denied), Toast.LENGTH_SHORT).show();
+                });
 
         // Init settings
         settingsPrefs = new SettingsPrefs(this);
@@ -151,16 +183,6 @@ public class MainActivity extends AppCompatActivity {
             permissionStatusBar.setOnClickListener(v -> onPermissionStatusBarClick());
 
         mSurface = mSurfaceView.getHolder().getSurface();
-
-        requestPermissionLauncher = registerForActivityResult(
-                new ActivityResultContracts.RequestPermission(), isGranted -> {
-                    checkAllPermissionsAndUpdateUI();
-                    if (isGranted) Log.d(TAG, "Permission granted");
-                });
-
-        overlaySettingsLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(), result ->
-                        checkAllPermissionsAndUpdateUI());
 
         regionOverlay.setOnRegionChangedListener(region -> {
             if (captureEngine != null)
@@ -236,31 +258,17 @@ public class MainActivity extends AppCompatActivity {
 
         updateCaptureInfo();
         mHandler.postDelayed(() -> checkAllPermissionsAndUpdateUI(), 500);
+        } catch (Exception e) {
+            Log.e(TAG, "FATAL in onCreate: " + e.getMessage(), e);
+            Toast.makeText(this, "خطأ في بدء التطبيق: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            finish();
+        }
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         mediaProjectionManager = (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
-        startMediaProjectionActivity = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(), result -> {
-                    int resultCode = result.getResultCode();
-                    if (resultCode == Activity.RESULT_OK) {
-                        Intent data = result.getData();
-                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                            MediaProjectionManager pm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                            mMediaProjection = pm.getMediaProjection(resultCode, data);
-                            if (mMediaProjection != null) startScreenCapture();
-                        } else {
-                            try {
-                                Intent si = new Intent(this, MyMediaProjectionService.class);
-                                si.putExtra("resultCode", resultCode);
-                                si.putExtra("data", data);
-                                ContextCompat.startForegroundService(this, si);
-                            } catch (RuntimeException e) { Log.w(TAG, "Error: " + e.getMessage()); }
-                        }
-                    } else Toast.makeText(this, getString(R.string.permission_denied), Toast.LENGTH_SHORT).show();
-                });
 
         if (!isReceiverRegistered) {
             IntentFilter filter = new IntentFilter(ACTION_MEDIA_PROJECTION_STARTED);
