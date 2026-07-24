@@ -105,4 +105,40 @@
     <!-- Settings saved -->
     <string name="settings_saved">✅ تم حفظ الإعدادات</string>
     <string name="settings_reset">تم إعادة تعيين الإعدادات</string>
+
+    <!-- Video Settings -->
+    <string name="video_settings">🎬 إعدادات الفيديو</string>
+    <string name="video_frame_rate">🎞️ معدل الإطارات</string>
+    <string name="video_quality">💎 جودة الفيديو (H.264 Bitrate)</string>
+    <string name="video_i_frame">🔑 الإطارات الرئيسية (I-Frame)</string>
+    <string name="video_codec_profile">🛡️ بروفايل H.264</string>
+    <string name="video_settings_saved">✅ تم حفظ إعدادات الفيديو</string>
+    <string name="settings_choice_title">⚙️ الإعدادات</string>
+    <string name="settings_audio">🎤 إعدادات الصوت</string>
+    <string name="settings_video">🎬 إعدادات الفيديو</string>
+    <string name="settings_summary">📊 ملخص الإعدادات</string>
+
+    <!-- Frame Rate options -->
+    <string name="fps_15">15 fps - توفير</string>
+    <string name="fps_24">24 fps - سينمائي</string>
+    <string name="fps_30">30 fps - قياسي (افتراضي)</string>
+    <string name="fps_60">60 fps - سلس</string>
+
+    <!-- Video Bitrate options -->
+    <string name="vbitrate_low">1 Mbps - منخفض</string>
+    <string name="vbitrate_medium">2.5 Mbps - متوسط</string>
+    <string name="vbitrate_high">4 Mbps - عالي (افتراضي)</string>
+    <string name="vbitrate_very_high">8 Mbps - عالي جداً</string>
+    <string name="vbitrate_extreme">12 Mbps - فائق</string>
+
+    <!-- I-Frame options -->
+    <string name="iframe_half">0.5 ثانية - دقيق</string>
+    <string name="iframe_one">1 ثانية (افتراضي)</string>
+    <string name="iframe_two">2 ثوانٍ - موفر</string>
+    <string name="iframe_five">5 ثوانٍ - اقتصادي</string>
+
+    <!-- Codec Profile -->
+    <string name="codec_baseline">Baseline - توافق واسع</string>
+    <string name="codec_main">Main - جودة متوسطة</string>
+    <string name="codec_high">High - جودة عالية (افتراضي)</string>
 </resources>

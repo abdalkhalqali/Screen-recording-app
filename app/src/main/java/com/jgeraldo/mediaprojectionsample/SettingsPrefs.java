@@ -20,6 +20,12 @@ public class SettingsPrefs {
     private static final String KEY_DELAY_SECONDS = "delay_seconds";
     private static final String KEY_MAX_DURATION_SECONDS = "max_duration_seconds";
     private static final String KEY_VIDEO_RESOLUTION = "video_resolution";
+    // Video Config keys
+    private static final String KEY_VIDEO_FRAME_RATE = "video_frame_rate";
+    private static final String KEY_VIDEO_QUALITY = "video_quality";
+    private static final String KEY_VIDEO_I_FRAME_INTERVAL = "video_i_frame_interval";
+    private static final String KEY_VIDEO_CODEC_PROFILE = "video_codec_profile";
+
     private static final String KEY_REGION_LOCKED = "region_locked";
     private static final String KEY_REGION_LEFT = "region_left";
     private static final String KEY_REGION_TOP = "region_top";
@@ -166,6 +172,39 @@ public class SettingsPrefs {
                 Math.min(noiseOrd, AudioConfig.NoiseSuppression.values().length - 1)];
 
         return new AudioConfig(sr, q, ns);
+    }
+
+    // --- Video Config ---
+
+    /** Save all VideoConfig settings at once */
+    public void saveVideoConfig(VideoConfig config) {
+        prefs.edit()
+                .putInt(KEY_VIDEO_FRAME_RATE, config.getFrameRate().ordinal())
+                .putInt(KEY_VIDEO_QUALITY, config.getQuality().ordinal())
+                .putInt(KEY_VIDEO_I_FRAME_INTERVAL, config.getIFrameInterval().ordinal())
+                .putInt(KEY_VIDEO_CODEC_PROFILE, config.getCodecProfile().ordinal())
+                .apply();
+    }
+
+    /** Load saved VideoConfig or return the default */
+    public VideoConfig loadVideoConfig() {
+        int frameRateOrd = prefs.getInt(KEY_VIDEO_FRAME_RATE, -1);
+        int qualityOrd = prefs.getInt(KEY_VIDEO_QUALITY, -1);
+        int iFrameOrd = prefs.getInt(KEY_VIDEO_I_FRAME_INTERVAL, -1);
+        int codecOrd = prefs.getInt(KEY_VIDEO_CODEC_PROFILE, -1);
+
+        if (frameRateOrd < 0) return new VideoConfig(); // default
+
+        VideoConfig.FrameRate fr = VideoConfig.FrameRate.values()[
+                Math.min(frameRateOrd, VideoConfig.FrameRate.values().length - 1)];
+        VideoConfig.VideoQuality q = VideoConfig.VideoQuality.values()[
+                Math.min(qualityOrd, VideoConfig.VideoQuality.values().length - 1)];
+        VideoConfig.IFrameInterval ifi = VideoConfig.IFrameInterval.values()[
+                Math.min(iFrameOrd, VideoConfig.IFrameInterval.values().length - 1)];
+        VideoConfig.CodecProfile cp = VideoConfig.CodecProfile.values()[
+                Math.min(codecOrd, VideoConfig.CodecProfile.values().length - 1)];
+
+        return new VideoConfig(fr, q, ifi, cp);
     }
 
     /** Clear all settings */

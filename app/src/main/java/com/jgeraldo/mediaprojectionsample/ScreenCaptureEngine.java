@@ -39,10 +39,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ScreenCaptureEngine {
 
     private static final String TAG = "ScreenCaptureEngine";
-    private static final int FRAME_RATE = 30;
-    private static final int BIT_RATE = 4_000_000;
-    private static final int I_FRAME_INTERVAL = 1;
     private static final int MAX_IMAGES = 2;
+    // Video config (replaces old constants)
+    private VideoConfig videoConfig = new VideoConfig();
 
     private MediaProjection mediaProjection;
     private ImageReader videoReader;      // YUV_420_888 for video encoding
@@ -159,6 +158,8 @@ public class ScreenCaptureEngine {
     public AudioSource getAudioSource() { return audioSource; }
     public void setAudioConfig(AudioConfig config) { if (config != null) this.audioConfig = config; }
     public AudioConfig getAudioConfig() { return audioConfig; }
+    public void setVideoConfig(VideoConfig config) { if (config != null) this.videoConfig = config; }
+    public VideoConfig getVideoConfig() { return videoConfig; }
     public boolean isAudioEnabled() { return audioSource != AudioSource.NONE; }
 
     public void startVideoCapture(int displayWidth, int displayHeight) {
@@ -481,9 +482,9 @@ public class ScreenCaptureEngine {
                 MediaFormat.MIMETYPE_VIDEO_AVC, cropW, cropH);
         videoFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible);
-        videoFormat.setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE);
-        videoFormat.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
-        videoFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL);
+        videoFormat.setInteger(MediaFormat.KEY_BIT_RATE, videoConfig.getBitrate());
+        videoFormat.setInteger(MediaFormat.KEY_FRAME_RATE, videoConfig.getFrameRateValue());
+        videoFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, videoConfig.getIFrameIntervalValue());
 
         videoCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
         videoCodec.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
@@ -546,7 +547,7 @@ public class ScreenCaptureEngine {
                 videoCodec.releaseOutputBuffer(outputIndex, false);
             }
 
-            lastPresentationTimeUs += 1000000 / FRAME_RATE;
+            lastPresentationTimeUs += 1000000 / videoConfig.getFrameRateValue();
         } catch (Exception e) {
             Log.e(TAG, "YUV encode: " + e.getMessage());
         }

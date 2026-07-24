@@ -72,6 +72,7 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton btnMic, btnSettings, btnGallery, btnTimer, btnLock, btnResolution;
     private ScreenCaptureEngine.AudioSource audioSourceMode = ScreenCaptureEngine.AudioSource.EXTERNAL;
     private AudioConfig audioConfig = new AudioConfig();
+    private VideoConfig videoConfig = new VideoConfig();
 
     private Surface mSurface;
     private Handler mHandler;
@@ -199,8 +200,8 @@ public class MainActivity extends AppCompatActivity {
         });
         updateAudioSourceButton();
 
-        // Audio settings
-        btnSettings.setOnClickListener(v -> showAudioSettingsDialog());
+        // Settings button - choose Audio or Video settings
+        btnSettings.setOnClickListener(v -> showSettingsChoiceDialog());
 
         // Screenshot quick
         btnScreenshotQuick.setOnClickListener(v -> {
@@ -291,6 +292,7 @@ public class MainActivity extends AppCompatActivity {
     // ---- Settings ----
     private void loadSavedSettings() {
         audioConfig = settingsPrefs.loadAudioConfig();
+        videoConfig = settingsPrefs.loadVideoConfig();
         int sourceOrd = settingsPrefs.getAudioSource(ScreenCaptureEngine.AudioSource.EXTERNAL.ordinal());
         audioSourceMode = ScreenCaptureEngine.AudioSource.values()[
                 Math.min(sourceOrd, ScreenCaptureEngine.AudioSource.values().length - 1)];
@@ -480,6 +482,7 @@ public class MainActivity extends AppCompatActivity {
         captureEngine.setCaptureRegion(regionOverlay.getNormalizedRegion());
         captureEngine.setAudioSource(audioSourceMode);
         captureEngine.setAudioConfig(audioConfig);
+        captureEngine.setVideoConfig(videoConfig);
         captureEngine.setOnCaptureListener(new ScreenCaptureEngine.OnCaptureListener() {
             @Override public void onScreenshotSaved(Uri uri, String message) {
                 runOnUiThread(() -> { Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show(); showSavedNotification(uri, "image/*"); });
@@ -593,7 +596,8 @@ public class MainActivity extends AppCompatActivity {
                         "🎬 المدة: " + duration + "\n" +
                         "📺 الدقة: " + displayWidth + "×" + displayHeight + "\n" +
                         "🔊 الصوت: " + audioSourceMode.getDisplayName() + "\n" +
-                        "🎚️ الجودة: " + audioConfig.getQuality().label
+                        "🎚️ الصوت: " + audioConfig.getQuality().label + "\n" +
+                        "🎞️ الفيديو: " + videoConfig.getFrameRate().label + " | " + videoConfig.getQuality().label
                 )
                 .setPositiveButton("📤 مشاركة", (d, w) -> {
                     if (captureEngine != null) {
@@ -719,6 +723,167 @@ public class MainActivity extends AppCompatActivity {
         String[] missing = getMissingPermissions();
         if (missing.length > 0) requestAllPermissions();
         else checkAllPermissionsAndUpdateUI();
+    }
+
+    // ---- Settings Choice Dialog ----
+    private void showSettingsChoiceDialog() {
+        new MaterialAlertDialogBuilder(this)
+                .setIcon(android.R.drawable.ic_menu_manage)
+                .setTitle("⚙️ الإعدادات")
+                .setItems(new String[]{
+                        "🎤 إعدادات الصوت",
+                        "🎬 إعدادات الفيديو",
+                        "📊 الإحصائيات الحالية"
+                }, (dialog, which) -> {
+                    if (which == 0) showAudioSettingsDialog();
+                    else if (which == 1) showVideoSettingsDialog();
+                    else showSettingsSummary();
+                })
+                .setNegativeButton("إغلاق", null)
+                .show();
+    }
+
+    private void showSettingsSummary() {
+        new MaterialAlertDialogBuilder(this)
+                .setIcon(android.R.drawable.ic_menu_info_details)
+                .setTitle("📊 ملخص الإعدادات")
+                .setMessage(
+                        "🎬 وضع الالتقاط: " + currentMode.name() + "\n" +
+                        "📺 الدقة: " + displayWidth + "×" + displayHeight + "\n" +
+                        "🎞️ الإطارات: " + videoConfig.getFrameRate().label + "\n" +
+                        "💎 جودة الفيديو: " + videoConfig.getQuality().label + "\n" +
+                        "🔑 I-Frame: " + videoConfig.getIFrameInterval().label + "\n" +
+                        "🛡️ البروفايل: " + videoConfig.getCodecProfile().label + "\n" +
+                        "🔊 الصوت: " + audioSourceMode.getDisplayName() + "\n" +
+                        "🎚️ العينة: " + audioConfig.getSampleRate().label + "\n" +
+                        "🎧 جودة AAC: " + audioConfig.getQuality().label + "\n" +
+                        "🔇 الضوضاء: " + audioConfig.getNoiseSuppression().label + "\n" +
+                        "⏱️ تأخير: " + (delaySeconds > 0 ? delaySeconds + "ث" : "بدون") + "\n" +
+                        "⏰ إيقاف تلقائي: " + (maxDurationSeconds > 0 ? (maxDurationSeconds / 60) + "د" : "بدون")
+                )
+                .setPositiveButton("تم", null)
+                .show();
+    }
+
+    // ---- Video Settings Dialog ----
+    private void showVideoSettingsDialog() {
+        VideoConfig.FrameRate currentFrameRate = videoConfig.getFrameRate();
+        VideoConfig.VideoQuality currentQuality = videoConfig.getQuality();
+        VideoConfig.IFrameInterval currentIFrame = videoConfig.getIFrameInterval();
+        VideoConfig.CodecProfile currentCodec = videoConfig.getCodecProfile();
+
+        final String[] frameRates = new String[VideoConfig.FrameRate.values().length];
+        final String[] qualities = new String[VideoConfig.VideoQuality.values().length];
+        final String[] iFrames = new String[VideoConfig.IFrameInterval.values().length];
+        final String[] codecs = new String[VideoConfig.CodecProfile.values().length];
+        int selFr = 0, selQ = 0, selIF = 0, selCp = 0;
+
+        for (int i = 0; i < frameRates.length; i++) {
+            frameRates[i] = VideoConfig.FrameRate.values()[i].label;
+            if (VideoConfig.FrameRate.values()[i] == currentFrameRate) selFr = i;
+        }
+        for (int i = 0; i < qualities.length; i++) {
+            qualities[i] = VideoConfig.VideoQuality.values()[i].label;
+            if (VideoConfig.VideoQuality.values()[i] == currentQuality) selQ = i;
+        }
+        for (int i = 0; i < iFrames.length; i++) {
+            iFrames[i] = VideoConfig.IFrameInterval.values()[i].label;
+            if (VideoConfig.IFrameInterval.values()[i] == currentIFrame) selIF = i;
+        }
+        for (int i = 0; i < codecs.length; i++) {
+            codecs[i] = VideoConfig.CodecProfile.values()[i].label;
+            if (VideoConfig.CodecProfile.values()[i] == currentCodec) selCp = i;
+        }
+
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_video_settings, null);
+        androidx.appcompat.widget.AppCompatTextView tvFrameRate = dialogView.findViewById(R.id.tvFrameRate);
+        androidx.appcompat.widget.AppCompatTextView tvVideoQuality = dialogView.findViewById(R.id.tvVideoQuality);
+        androidx.appcompat.widget.AppCompatTextView tvIFrame = dialogView.findViewById(R.id.tvIFrame);
+        androidx.appcompat.widget.AppCompatTextView tvCodec = dialogView.findViewById(R.id.tvCodec);
+
+        if (tvFrameRate == null) { showSimpleVideoSettingsDialog(); return; }
+
+        final int[] fSelFr = {selFr}, fSelQ = {selQ}, fSelIF = {selIF}, fSelCp = {selCp};
+        tvFrameRate.setText(frameRates[fSelFr[0]]);
+        tvVideoQuality.setText(qualities[fSelQ[0]]);
+        tvIFrame.setText(iFrames[fSelIF[0]]);
+        tvCodec.setText(codecs[fSelCp[0]]);
+
+        dialogView.findViewById(R.id.btnFrameRatePrev).setOnClickListener(v -> { fSelFr[0] = (fSelFr[0] - 1 + frameRates.length) % frameRates.length; tvFrameRate.setText(frameRates[fSelFr[0]]); });
+        dialogView.findViewById(R.id.btnFrameRateNext).setOnClickListener(v -> { fSelFr[0] = (fSelFr[0] + 1) % frameRates.length; tvFrameRate.setText(frameRates[fSelFr[0]]); });
+        dialogView.findViewById(R.id.btnQualityPrev).setOnClickListener(v -> { fSelQ[0] = (fSelQ[0] - 1 + qualities.length) % qualities.length; tvVideoQuality.setText(qualities[fSelQ[0]]); });
+        dialogView.findViewById(R.id.btnVideoQualityNext).setOnClickListener(v -> { fSelQ[0] = (fSelQ[0] + 1) % qualities.length; tvVideoQuality.setText(qualities[fSelQ[0]]); });
+        dialogView.findViewById(R.id.btnIFramePrev).setOnClickListener(v -> { fSelIF[0] = (fSelIF[0] - 1 + iFrames.length) % iFrames.length; tvIFrame.setText(iFrames[fSelIF[0]]); });
+        dialogView.findViewById(R.id.btnIFrameNext).setOnClickListener(v -> { fSelIF[0] = (fSelIF[0] + 1) % iFrames.length; tvIFrame.setText(iFrames[fSelIF[0]]); });
+        dialogView.findViewById(R.id.btnCodecPrev).setOnClickListener(v -> { fSelCp[0] = (fSelCp[0] - 1 + codecs.length) % codecs.length; tvCodec.setText(codecs[fSelCp[0]]); });
+        dialogView.findViewById(R.id.btnCodecNext).setOnClickListener(v -> { fSelCp[0] = (fSelCp[0] + 1) % codecs.length; tvCodec.setText(codecs[fSelCp[0]]); });
+
+        new MaterialAlertDialogBuilder(this).setIcon(android.R.drawable.ic_menu_manage).setTitle("🎬 إعدادات الفيديو المتقدمة").setView(dialogView)
+                .setPositiveButton("✅ حفظ", (d, w) -> {
+                    videoConfig = new VideoConfig(
+                            VideoConfig.FrameRate.values()[fSelFr[0]],
+                            VideoConfig.VideoQuality.values()[fSelQ[0]],
+                            VideoConfig.IFrameInterval.values()[fSelIF[0]],
+                            VideoConfig.CodecProfile.values()[fSelCp[0]]);
+                    settingsPrefs.saveVideoConfig(videoConfig);
+                    Toast.makeText(this, "✅ تم حفظ إعدادات الفيديو", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("🚫 إلغاء", null).show();
+    }
+
+    private void showSimpleVideoSettingsDialog() {
+        new MaterialAlertDialogBuilder(this).setTitle("🎬 إعدادات الفيديو")
+                .setItems(new String[]{
+                        "🎞️ الإطارات: " + videoConfig.getFrameRate().label,
+                        "💎 الجودة: " + videoConfig.getQuality().label,
+                        "🔑 I-Frame: " + videoConfig.getIFrameInterval().label,
+                        "🛡️ البروفايل: " + videoConfig.getCodecProfile().label
+                }, (dialog, which) -> {
+                    if (which == 0) showFrameRatePicker();
+                    else if (which == 1) showVideoQualityPicker();
+                    else if (which == 2) showIFramePicker();
+                    else showCodecPicker();
+                }).setPositiveButton("تم", null).show();
+    }
+
+    private void showFrameRatePicker() {
+        VideoConfig.FrameRate[] values = VideoConfig.FrameRate.values();
+        String[] labels = new String[values.length];
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) { labels[i] = values[i].label; if (values[i] == videoConfig.getFrameRate()) selected = i; }
+        new MaterialAlertDialogBuilder(this).setTitle("🎞️ معدل الإطارات")
+                .setSingleChoiceItems(labels, selected, (d, w) -> { videoConfig.setFrameRate(values[w]); settingsPrefs.saveVideoConfig(videoConfig); d.dismiss(); })
+                .setNegativeButton("إلغاء", null).show();
+    }
+
+    private void showVideoQualityPicker() {
+        VideoConfig.VideoQuality[] values = VideoConfig.VideoQuality.values();
+        String[] labels = new String[values.length];
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) { labels[i] = values[i].label; if (values[i] == videoConfig.getQuality()) selected = i; }
+        new MaterialAlertDialogBuilder(this).setTitle("💎 جودة الفيديو (H.264)")
+                .setSingleChoiceItems(labels, selected, (d, w) -> { videoConfig.setQuality(values[w]); settingsPrefs.saveVideoConfig(videoConfig); d.dismiss(); })
+                .setNegativeButton("إلغاء", null).show();
+    }
+
+    private void showIFramePicker() {
+        VideoConfig.IFrameInterval[] values = VideoConfig.IFrameInterval.values();
+        String[] labels = new String[values.length];
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) { labels[i] = values[i].label; if (values[i] == videoConfig.getIFrameInterval()) selected = i; }
+        new MaterialAlertDialogBuilder(this).setTitle("🔑 الإطارات الرئيسية")
+                .setSingleChoiceItems(labels, selected, (d, w) -> { videoConfig.setIFrameInterval(values[w]); settingsPrefs.saveVideoConfig(videoConfig); d.dismiss(); })
+                .setNegativeButton("إلغاء", null).show();
+    }
+
+    private void showCodecPicker() {
+        VideoConfig.CodecProfile[] values = VideoConfig.CodecProfile.values();
+        String[] labels = new String[values.length];
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) { labels[i] = values[i].label; if (values[i] == videoConfig.getCodecProfile()) selected = i; }
+        new MaterialAlertDialogBuilder(this).setTitle("🛡️ بروفايل H.264")
+                .setSingleChoiceItems(labels, selected, (d, w) -> { videoConfig.setCodecProfile(values[w]); settingsPrefs.saveVideoConfig(videoConfig); d.dismiss(); })
+                .setNegativeButton("إلغاء", null).show();
     }
 
     // ---- Audio Settings Dialog ----
