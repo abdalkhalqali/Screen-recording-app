@@ -43,4 +43,66 @@
     <string name="perm_open_settings">⚙️ فتح الإعدادات</string>
     <string name="perm_allow">✅ السماح</string>
     <string name="perm_later">🚫 لاحقاً</string>
+
+    <!-- Timer Features -->
+    <string name="timer_label">⏱️ المؤقتات</string>
+    <string name="delay_timer">⏱️ تأخير البدء</string>
+    <string name="delay_timer_desc">انتظر قبل بدء التسجيل</string>
+    <string name="auto_stop">⏰ إيقاف تلقائي</string>
+    <string name="auto_stop_desc">إيقاف التسجيل تلقائياً بعد مدة</string>
+    <string name="no_delay">بدون تأخير</string>
+    <string name="seconds_3">3 ثوانٍ</string>
+    <string name="seconds_5">5 ثوانٍ</string>
+    <string name="seconds_10">10 ثوانٍ</string>
+    <string name="no_limit">بدون حد</string>
+    <string name="min_1">دقيقة</string>
+    <string name="min_3">3 دقائق</string>
+    <string name="min_5">5 دقائق</string>
+    <string name="min_10">10 دقائق</string>
+    <string name="min_30">30 دقيقة</string>
+    <string name="recording_starts_in">سيبدأ التسجيل بعد %d ثوانٍ</string>
+    <string name="auto_stop_in">سيتم إيقاف التسجيل تلقائياً بعد %d ثانية</string>
+    <string name="timer_cancelled">تم إلغاء المؤقت</string>
+
+    <!-- Video Resolution -->
+    <string name="resolution_label">📺 دقة الفيديو</string>
+    <string name="resolution_480p">480p (SD)</string>
+    <string name="resolution_720p">720p (HD)</string>
+    <string name="resolution_1080p">1080p (Full HD)</string>
+
+    <!-- Region Lock -->
+    <string name="lock_region">🔒 قفل المنطقة</string>
+    <string name="unlock_region">🔓 فتح المنطقة</string>
+    <string name="region_locked">🔒 تم قفل المنطقة</string>
+    <string name="region_unlocked">🔓 تم فتح المنطقة</string>
+
+    <!-- Media Gallery -->
+    <string name="gallery">📂 المكتبة</string>
+    <string name="gallery_title">📂 مكتبة التسجيلات</string>
+    <string name="no_recordings">لا توجد تسجيلات بعد</string>
+    <string name="no_screenshots">لا توجد لقطات شاشة</string>
+    <string name="delete">🗑️ حذف</string>
+    <string name="share">📤 مشاركة</string>
+    <string name="delete_confirm">هل أنت متأكد من حذف هذا الملف؟</string>
+    <string name="deleted">✅ تم الحذف</string>
+    <string name="tab_videos">🎬 فيديوهات</string>
+    <string name="tab_screenshots">🖼️ لقطات</string>
+    <string name="delete_all">حذف الكل</string>
+    <string name="delete_all_confirm">هل أنت متأكد من حذف جميع الملفات؟</string>
+
+    <!-- Capture Stats -->
+    <string name="stats_title">📊 إحصائيات التسجيل</string>
+    <string name="stats_duration">المدة</string>
+    <string name="stats_size">الحجم</string>
+    <string name="stats_resolution">الدقة</string>
+    <string name="stats_frames">الإطارات</string>
+    <string name="stats_audio">الصوت</string>
+    <string name="stats_file_name">اسم الملف</string>
+    <string name="share_video">📤 مشاركة الفيديو</string>
+    <string name="share_screenshot">📤 مشاركة الصورة</string>
+    <string name="open_in_app">فتح في التطبيق</string>
+
+    <!-- Settings saved -->
+    <string name="settings_saved">✅ تم حفظ الإعدادات</string>
+    <string name="settings_reset">تم إعادة تعيين الإعدادات</string>
 </resources>

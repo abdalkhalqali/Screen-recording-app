@@ -248,7 +248,7 @@
                     android:textSize="13sp" />
             </com.google.android.material.button.MaterialButtonToggleGroup>
 
-            <!-- Action Buttons Row -->
+            <!-- Action Buttons Row 1 -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="56dp"
@@ -259,28 +259,85 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/modeToggle">
 
+                <!-- Gallery Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnGallery"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:text="📂"
+                    android:textSize="16sp"
+                    app:cornerRadius="14dp"
+                    app:icon="@null" />
+
+                <!-- Timer Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnTimer"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:text="⏱️"
+                    android:textSize="16sp"
+                    app:cornerRadius="14dp"
+                    app:icon="@null" />
+
+                <!-- Region Lock Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnLock"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:text="🔓"
+                    android:textSize="16sp"
+                    app:cornerRadius="14dp"
+                    app:icon="@null" />
+
+                <!-- Resolution Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnResolution"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:text="720p"
+                    android:textSize="11sp"
+                    app:cornerRadius="14dp"
+                    app:icon="@null" />
+
+            </LinearLayout>
+
+            <!-- Action Buttons Row 2 -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginTop="4dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/modeToggle">
+
                 <!-- Quick Screenshot Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnScreenshotQuick"
                     style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:visibility="gone"
-                    app:cornerRadius="16dp"
+                    app:cornerRadius="14dp"
                     app:icon="@android:drawable/ic_menu_camera"
                     app:iconGravity="textStart"
-                    app:iconSize="24dp" />
+                    app:iconSize="20dp" />
 
-                <!-- Audio Source Button (Internal/External/Both/Off) -->
+                <!-- Audio Source Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnMic"
                     style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:backgroundTint="#1A22C55E"
                     android:text="🎤"
-                    android:textSize="18sp"
-                    app:cornerRadius="16dp"
+                    android:textSize="16sp"
+                    app:cornerRadius="14dp"
                     app:icon="@null" />
 
                 <View
@@ -292,7 +349,7 @@
                 <Button
                     android:id="@+id/button"
                     android:layout_width="120dp"
-                    android:layout_height="56dp"
+                    android:layout_height="48dp"
                     android:background="@drawable/start_button_bg"
                     android:elevation="4dp"
                     android:shadowColor="#406366F1"
@@ -301,7 +358,7 @@
                     android:shadowRadius="12"
                     android:text="@string/button_start"
                     android:textColor="#FFFFFF"
-                    android:textSize="16sp"
+                    android:textSize="14sp"
                     android:textStyle="bold" />
 
                 <View
@@ -313,11 +370,11 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSettings"
                     style="@style/Widget.Material3.Button.TonalButton"
-                    android:layout_width="56dp"
-                    android:layout_height="56dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
                     android:text="⚙️"
-                    android:textSize="18sp"
-                    app:cornerRadius="16dp"
+                    android:textSize="16sp"
+                    app:cornerRadius="14dp"
                     app:icon="@null" />
             </LinearLayout>
 
