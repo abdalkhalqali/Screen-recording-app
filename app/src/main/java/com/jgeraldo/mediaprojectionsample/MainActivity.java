@@ -13,6 +13,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import com.jgeraldo.mediaprojectionsample.R;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceView;
@@ -133,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
                                     }
                                 }
                             } else {
-                                Toast.makeText(this, "Screen sharing permission denied",
+                                Toast.makeText(this, getString(R.string.permission_denied),
                                         Toast.LENGTH_SHORT).show();
                             }
                         });
@@ -188,7 +189,7 @@ public class MainActivity extends AppCompatActivity {
         mMediaProjection.registerCallback(callback, null);
 
         mVirtualDisplay = mMediaProjection.createVirtualDisplay(
-                "ScreenCapture",
+                getString(R.string.screen_capture_title),
                 720,
                 1080,
                 getResources().getDisplayMetrics().densityDpi,
@@ -198,7 +199,7 @@ public class MainActivity extends AppCompatActivity {
                 null,
                 mHandler);
 
-        mButtonToggle.setText("Stop");
+        mButtonToggle.setText(R.string.button_stop);
 
         // Do whatever you need with the virtualDisplay
     }
@@ -209,6 +210,6 @@ public class MainActivity extends AppCompatActivity {
         }
         mVirtualDisplay.release();
         mVirtualDisplay = null;
-        mButtonToggle.setText("Start");
+        mButtonToggle.setText(R.string.button_start);
     }
 }

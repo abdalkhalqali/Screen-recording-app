@@ -35,7 +35,7 @@ public class MyMediaProjectionService extends Service {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             String NOTIFICATION_CHANNEL_ID = "com.jgeraldo.mediaprojectionsample.MyMediaProjectionService";
-            String channelName = "MyMediaProjectionService";
+            String channelName = getString(R.string.notification_channel_name);
             NotificationChannel chan = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, NotificationManager.IMPORTANCE_NONE);
             chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
             NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);

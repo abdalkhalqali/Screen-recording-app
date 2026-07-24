@@ -31,3 +31,13 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+*.swp
+*.swo
