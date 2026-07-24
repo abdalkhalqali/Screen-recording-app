@@ -71,6 +71,10 @@ public class MainActivity extends AppCompatActivity {
     private TextView captureInfoText;
     private MaterialCardView controlPanel;
     private ImageButton btnScreenshotQuick, btnSettings;
+    private com.google.android.material.button.MaterialButton btnMic;
+    private com.google.android.material.button.MaterialButton btnSettings;
+    private ScreenCaptureEngine.AudioSource audioSourceMode = ScreenCaptureEngine.AudioSource.EXTERNAL;
+    private AudioConfig audioConfig = new AudioConfig();
 
     private Surface mSurface;
     private Handler mHandler;
@@ -131,6 +135,8 @@ public class MainActivity extends AppCompatActivity {
         captureInfoText = findViewById(R.id.captureInfoText);
         controlPanel = findViewById(R.id.controlPanel);
         btnScreenshotQuick = findViewById(R.id.btnScreenshotQuick);
+        btnMic = findViewById(R.id.btnMic);
+        btnSettings = findViewById(R.id.btnSettings);
         permissionStatusBar = findViewById(R.id.permissionStatusBar);
         permissionStatusText = findViewById(R.id.permissionStatusText);
         permissionDot = findViewById(R.id.permissionDot);
@@ -197,6 +203,23 @@ public class MainActivity extends AppCompatActivity {
                 stopCapture();
             }
         });
+
+        // Audio source button (cycles through modes)
+        if (btnMic != null) {
+            btnMic.setOnClickListener(v -> {
+                ScreenCaptureEngine.AudioSource[] sources =
+                        ScreenCaptureEngine.AudioSource.values();
+                int nextIndex = (audioSourceMode.ordinal() + 1) % sources.length;
+                audioSourceMode = sources[nextIndex];
+                updateAudioSourceButton();
+            });
+            updateAudioSourceButton();
+        }
+
+        // Audio settings button (opens advanced settings dialog)
+        if (btnSettings != null) {
+            btnSettings.setOnClickListener(v -> showAudioSettingsDialog());
+        }
 
         // Quick screenshot button
         btnScreenshotQuick.setOnClickListener(v -> {
@@ -322,6 +345,8 @@ public class MainActivity extends AppCompatActivity {
         // Initialize capture engine
         captureEngine = new ScreenCaptureEngine(mMediaProjection, getContentResolver());
         captureEngine.setCaptureRegion(regionOverlay.getNormalizedRegion());
+        captureEngine.setAudioSource(audioSourceMode);
+        captureEngine.setAudioConfig(audioConfig);
         captureEngine.setOnCaptureListener(new ScreenCaptureEngine.OnCaptureListener() {
             @Override
             public void onScreenshotSaved(Uri uri, String message) {
@@ -565,6 +590,12 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        // RECORD_AUDIO (for microphone recording)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.RECORD_AUDIO);
+        }
+
         // SYSTEM_ALERT_WINDOW (for floating control)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
@@ -588,6 +619,8 @@ public class MainActivity extends AppCompatActivity {
                 return "قراءة الفيديو";
             case Manifest.permission.WRITE_EXTERNAL_STORAGE:
                 return "التخزين";
+            case Manifest.permission.RECORD_AUDIO:
+                return "الميكروفون";
             case Manifest.permission.SYSTEM_ALERT_WINDOW:
                 return "النوافذ العائمة";
             default:
@@ -667,6 +700,11 @@ public class MainActivity extends AppCompatActivity {
                 message = "نحتاج إلى الوصول للتخزين لحفظ لقطات الشاشة وتسجيلات الفيديو.";
                 icon = android.R.drawable.ic_menu_save;
                 break;
+            case Manifest.permission.RECORD_AUDIO:
+                title = "إذن الميكروفون";
+                message = "نحتاج إلى إذن الميكروفون لتسجيل الصوت مع الفيديو.";
+                icon = android.R.drawable.ic_btn_speak_now;
+                break;
             default:
                 title = "إذن مطلوب";
                 message = "هذا الإذن ضروري لتشغيل التطبيق بشكل صحيح.";
@@ -722,6 +760,235 @@ public class MainActivity extends AppCompatActivity {
         } else {
             checkAllPermissionsAndUpdateUI();
         }
+    }
+
+    // ---------- Advanced Audio Settings Dialog ----------
+
+    private void showAudioSettingsDialog() {
+        AudioConfig.SampleRate currentSampleRate = audioConfig.getSampleRate();
+        AudioConfig.AudioQuality currentQuality = audioConfig.getQuality();
+        AudioConfig.NoiseSuppression currentNoise = audioConfig.getNoiseSuppression();
+
+        // Arrays for the multi-selector
+        final String[] sampleRates = new String[AudioConfig.SampleRate.values().length];
+        final String[] qualities = new String[AudioConfig.AudioQuality.values().length];
+        final String[] noises = new String[AudioConfig.NoiseSuppression.values().length];
+
+        int selectedSampleRate = 0;
+        int selectedQuality = 0;
+        int selectedNoise = 0;
+
+        for (int i = 0; i < sampleRates.length; i++) {
+            sampleRates[i] = AudioConfig.SampleRate.values()[i].label;
+            if (AudioConfig.SampleRate.values()[i] == currentSampleRate)
+                selectedSampleRate = i;
+        }
+        for (int i = 0; i < qualities.length; i++) {
+            qualities[i] = AudioConfig.AudioQuality.values()[i].label;
+            if (AudioConfig.AudioQuality.values()[i] == currentQuality)
+                selectedQuality = i;
+        }
+        for (int i = 0; i < noises.length; i++) {
+            noises[i] = AudioConfig.NoiseSuppression.values()[i].label;
+            if (AudioConfig.NoiseSuppression.values()[i] == currentNoise)
+                selectedNoise = i;
+        }
+
+        // Inflate custom dialog layout
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_audio_settings, null);
+
+        androidx.appcompat.widget.AppCompatTextView tvSampleRate = dialogView.findViewById(R.id.tvSampleRate);
+        androidx.appcompat.widget.AppCompatTextView tvQuality = dialogView.findViewById(R.id.tvQuality);
+        androidx.appcompat.widget.AppCompatTextView tvNoise = dialogView.findViewById(R.id.tvNoise);
+        View ratePrev = dialogView.findViewById(R.id.btnRatePrev);
+        View rateNext = dialogView.findViewById(R.id.btnRateNext);
+        View qualityPrev = dialogView.findViewById(R.id.btnQualityPrev);
+        View qualityNext = dialogView.findViewById(R.id.btnQualityNext);
+        View noisePrev = dialogView.findViewById(R.id.btnNoisePrev);
+        View noiseNext = dialogView.findViewById(R.id.btnNoiseNext);
+
+        // If layout not found, fallback to simple list dialog
+        if (tvSampleRate == null) {
+            showSimpleAudioSettingsDialog();
+            return;
+        }
+
+        final int[] selRate = {selectedSampleRate};
+        final int[] selQuality = {selectedQuality};
+        final int[] selNoise = {selectedNoise};
+
+        tvSampleRate.setText(sampleRates[selRate[0]]);
+        tvQuality.setText(qualities[selQuality[0]]);
+        tvNoise.setText(noises[selNoise[0]]);
+
+        ratePrev.setOnClickListener(v -> {
+            selRate[0] = (selRate[0] - 1 + sampleRates.length) % sampleRates.length;
+            tvSampleRate.setText(sampleRates[selRate[0]]);
+        });
+        rateNext.setOnClickListener(v -> {
+            selRate[0] = (selRate[0] + 1) % sampleRates.length;
+            tvSampleRate.setText(sampleRates[selRate[0]]);
+        });
+        qualityPrev.setOnClickListener(v -> {
+            selQuality[0] = (selQuality[0] - 1 + qualities.length) % qualities.length;
+            tvQuality.setText(qualities[selQuality[0]]);
+        });
+        qualityNext.setOnClickListener(v -> {
+            selQuality[0] = (selQuality[0] + 1) % qualities.length;
+            tvQuality.setText(qualities[selQuality[0]]);
+        });
+        noisePrev.setOnClickListener(v -> {
+            selNoise[0] = (selNoise[0] - 1 + noises.length) % noises.length;
+            tvNoise.setText(noises[selNoise[0]]);
+        });
+        noiseNext.setOnClickListener(v -> {
+            selNoise[0] = (selNoise[0] + 1) % noises.length;
+            tvNoise.setText(noises[selNoise[0]]);
+        });
+
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .setIcon(android.R.drawable.ic_menu_manage)
+                .setTitle("⚙️ إعدادات الصوت المتقدمة")
+                .setView(dialogView)
+                .setPositiveButton("✅ حفظ", (dialog, which) -> {
+                    audioConfig = new AudioConfig(
+                            AudioConfig.SampleRate.values()[selRate[0]],
+                            AudioConfig.AudioQuality.values()[selQuality[0]],
+                            AudioConfig.NoiseSuppression.values()[selNoise[0]]
+                    );
+                    Toast.makeText(this,
+                            "✅ تم حفظ الإعدادات: " + audioConfig.toString(),
+                            Toast.LENGTH_LONG).show();
+                })
+                .setNegativeButton("🚫 إلغاء", null)
+                .show();
+    }
+
+    private void showSimpleAudioSettingsDialog() {
+        final String[] options = {
+                "معدل العينة: " + audioConfig.getSampleRate().label,
+                "جودة AAC: " + audioConfig.getQuality().label,
+                "كتم الضوضاء: " + audioConfig.getNoiseSuppression().label
+        };
+
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .setTitle("⚙️ إعدادات الصوت")
+                .setItems(options, (dialog, which) -> {
+                    switch (which) {
+                        case 0: // Sample Rate
+                            showSampleRatePicker();
+                            break;
+                        case 1: // Quality
+                            showQualityPicker();
+                            break;
+                        case 2: // Noise Suppression
+                            showNoisePicker();
+                            break;
+                    }
+                })
+                .setPositiveButton("تم", null)
+                .show();
+    }
+
+    private void showSampleRatePicker() {
+        final AudioConfig.SampleRate[] values = AudioConfig.SampleRate.values();
+        String[] labels = new String[values.length];
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) {
+            labels[i] = values[i].label;
+            if (values[i] == audioConfig.getSampleRate()) selected = i;
+        }
+
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .setTitle("🎚️ معدل العينة")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    audioConfig.setSampleRate(values[which]);
+                    dialog.dismiss();
+                    Toast.makeText(this, "✅ " + values[which].label, Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private void showQualityPicker() {
+        final AudioConfig.AudioQuality[] values = AudioConfig.AudioQuality.values();
+        String[] labels = new String[values.length];
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) {
+            labels[i] = values[i].label;
+            if (values[i] == audioConfig.getQuality()) selected = i;
+        }
+
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .setTitle("🎧 جودة AAC")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    audioConfig.setQuality(values[which]);
+                    dialog.dismiss();
+                    Toast.makeText(this, "✅ " + values[which].label, Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    private void showNoisePicker() {
+        final AudioConfig.NoiseSuppression[] values = AudioConfig.NoiseSuppression.values();
+        String[] labels = new String[values.length];
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) {
+            labels[i] = values[i].label;
+            if (values[i] == audioConfig.getNoiseSuppression()) selected = i;
+        }
+
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .setTitle("🔇 كتم الضوضاء")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> {
+                    audioConfig.setNoiseSuppression(values[which]);
+                    dialog.dismiss();
+                    Toast.makeText(this, "✅ " + values[which].label, Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("إلغاء", null)
+                .show();
+    }
+
+    // ---------- Audio Source Control ----------
+
+    private void updateAudioSourceButton() {
+        if (btnMic == null) return;
+
+        switch (audioSourceMode) {
+            case NONE:
+                btnMic.setText("🔇");
+                btnMic.setBackgroundTintList(
+                        android.content.res.ColorStateList.valueOf(0x1A6B7280));
+                btnMic.setIconTint(
+                        android.content.res.ColorStateList.valueOf(0x806B7280));
+                break;
+            case INTERNAL:
+                btnMic.setText("🔊");
+                btnMic.setBackgroundTintList(
+                        android.content.res.ColorStateList.valueOf(0x1A6366F1));
+                btnMic.setIconTint(
+                        android.content.res.ColorStateList.valueOf(0xFF818CF8));
+                break;
+            case EXTERNAL:
+                btnMic.setText("🎤");
+                btnMic.setBackgroundTintList(
+                        android.content.res.ColorStateList.valueOf(0x1A22C55E));
+                btnMic.setIconTint(
+                        android.content.res.ColorStateList.valueOf(0xFF22C55E));
+                break;
+            case BOTH:
+                btnMic.setText("🔊+🎤");
+                btnMic.setBackgroundTintList(
+                        android.content.res.ColorStateList.valueOf(0x1A8B5CF6));
+                btnMic.setIconTint(
+                        android.content.res.ColorStateList.valueOf(0xFFA78BFA));
+                break;
+        }
+
+        Toast.makeText(this,
+                "مصدر الصوت: " + audioSourceMode.getDisplayName(),
+                Toast.LENGTH_SHORT).show();
     }
 
     // ---------- Capture Info ----------

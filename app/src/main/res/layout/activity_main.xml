@@ -271,6 +271,18 @@
                     app:iconGravity="textStart"
                     app:iconSize="24dp" />
 
+                <!-- Audio Source Button (Internal/External/Both/Off) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMic"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:backgroundTint="#1A22C55E"
+                    android:text="🎤"
+                    android:textSize="18sp"
+                    app:cornerRadius="16dp"
+                    app:icon="@null" />
+
                 <View
                     android:layout_width="0dp"
                     android:layout_height="0dp"
@@ -297,17 +309,16 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
-                <!-- Settings Button (placeholder) -->
+                <!-- Audio Settings Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnSettings"
                     style="@style/Widget.Material3.Button.TonalButton"
                     android:layout_width="56dp"
                     android:layout_height="56dp"
-                    android:visibility="gone"
+                    android:text="⚙️"
+                    android:textSize="18sp"
                     app:cornerRadius="16dp"
-                    app:icon="@android:drawable/ic_menu_manage"
-                    app:iconGravity="textStart"
-                    app:iconSize="24dp" />
+                    app:icon="@null" />
             </LinearLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>

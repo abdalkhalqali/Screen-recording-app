@@ -21,6 +21,11 @@
     <string name="floating_pause">إيقاف مؤقت</string>
     <string name="floating_resume">استئناف</string>
     <string name="floating_stop">إيقاف</string>
+    <string name="mic_on">🎤 الميكروفون نشط</string>
+    <string name="mic_off">🔇 كتم الصوت</string>
+    <string name="audio_recording">الصوت</string>
+    <string name="perm_audio">تسجيل الصوت</string>
+    <string name="perm_audio_desc">نحتاج إلى إذن الميكروفون لتسجيل الصوت مع الفيديو.</string>
     <string name="overlay_permission">الرجاء السماح بعرض النوافذ العائمة</string>
     <string name="all_permissions_granted">جميع الأذونات ممنوحة ✅</string>
     <string name="missing_permissions">⚠️ أذونات مفقودة</string>

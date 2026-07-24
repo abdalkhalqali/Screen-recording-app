@@ -3,21 +3,19 @@ package com.jgeraldo.mediaprojectionsample;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
-import android.graphics.Matrix;
 import android.graphics.PixelFormat;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
-import android.media.MediaScannerConnection;
+import android.media.MediaRecorder;
+import android.media.Image;
+import android.media.ImageReader;
 import android.media.projection.MediaProjection;
 import android.net.Uri;
 import android.os.Build;
@@ -35,6 +33,7 @@ import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ScreenCaptureEngine {
 
@@ -51,14 +50,35 @@ public class ScreenCaptureEngine {
     private Handler backgroundHandler;
     private ContentResolver contentResolver;
 
-    private MediaCodec mediaCodec;
-    private MediaMuxer mediaMuxer;
-    private int trackIndex = -1;
+    // Video encoding
+    private MediaCodec videoCodec;
+    private int videoTrackIndex = -1;
     private long lastPresentationTimeUs = 0;
     private boolean isEncoding = false;
     private boolean isPaused = false;
     private boolean isVideoCapturing = false;
     private String currentVideoPath;
+
+    // Audio recording
+    public enum AudioSource {
+        NONE("🔇 بدون"),
+        INTERNAL("🔊 داخلي"),
+        EXTERNAL("🎤 خارجي"),
+        BOTH("🔊+🎤 كليهما");
+
+        private final String displayName;
+        AudioSource(String displayName) { this.displayName = displayName; }
+        public String getDisplayName() { return displayName; }
+    }
+
+    private AudioRecord audioRecord;
+    private MediaCodec audioCodec;
+    private int audioTrackIndex = -1;
+    private Thread audioThread;
+    private AtomicBoolean isAudioRecording = new AtomicBoolean(false);
+    private AudioSource audioSource = AudioSource.EXTERNAL;
+    private AudioConfig audioConfig = new AudioConfig();
+    private static final int AUDIO_CHANNELS = 1;
 
     // Broadcast actions for floating control
     public static final String ACTION_PAUSE = "com.jgeraldo.mediaprojectionsample.PAUSE";
@@ -143,6 +163,28 @@ public class ScreenCaptureEngine {
     }
 
     /**
+     * Set audio source type (INTERNAL, EXTERNAL, BOTH, NONE)
+     */
+    public void setAudioSource(AudioSource source) {
+        this.audioSource = source;
+    }
+
+    public AudioSource getAudioSource() {
+        return audioSource;
+    }
+
+    public void setAudioConfig(AudioConfig config) {
+        if (config != null) this.audioConfig = config;
+    }
+
+    public AudioConfig getAudioConfig() {
+        return audioConfig;
+    }
+
+    public boolean isAudioEnabled() {
+        return audioSource != AudioSource.NONE;
+
+    /**
      * Start video recording of the selected region
      */
     public void startVideoCapture(int displayWidth, int displayHeight) {
@@ -160,9 +202,22 @@ public class ScreenCaptureEngine {
             return;
         }
 
+        // Start audio recording based on source
+        if (audioSource == AudioSource.EXTERNAL || audioSource == AudioSource.BOTH) {
+            startAudioRecording(AudioSource.EXTERNAL);
+        }
+        if (audioSource == AudioSource.INTERNAL || audioSource == AudioSource.BOTH) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startInternalAudioRecording();
+            } else {
+                Log.w(TAG, "Internal audio requires Android 10+");
+                if (listener != null)
+                    listener.onCaptureError("الصوت الداخلي يحتاج Android 10 أو أحدث");
+            }
+        }
+
         imageReader.setOnImageAvailableListener(reader -> {
             if (!isVideoCapturing && isEncoding) {
-                // Stop encoding when done
                 stopEncoding();
                 return;
             }
@@ -254,7 +309,9 @@ public class ScreenCaptureEngine {
     public void release() {
         isVideoCapturing = false;
         isEncoding = false;
+        isAudioRecording.set(false);
         stopEncoding();
+        stopAudioCapture();
         releaseVirtualDisplay();
         releaseImageReader();
         if (mediaProjection != null) {
@@ -376,14 +433,13 @@ public class ScreenCaptureEngine {
         }
     }
 
-    // ---------- Video Encoding (MediaCodec) ----------
+    // ---------- Video + Audio Encoding ----------
 
     private void initMediaEncoder(int displayWidth, int displayHeight) throws IOException {
         // Calculate cropped dimensions
         int cropWidth = (int) (displayWidth * lastNormalizedRegion.width());
         int cropHeight = (int) (displayHeight * lastNormalizedRegion.height());
 
-        // Ensure even dimensions for encoder
         if (cropWidth % 2 != 0) cropWidth++;
         if (cropHeight % 2 != 0) cropHeight++;
 
@@ -411,20 +467,24 @@ public class ScreenCaptureEngine {
                 MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
         );
 
-        // Setup MediaCodec
-        MediaFormat format = MediaFormat.createVideoFormat(
+        // Setup Video MediaCodec
+        MediaFormat videoFormat = MediaFormat.createVideoFormat(
                 MediaFormat.MIMETYPE_VIDEO_AVC, cropWidth, cropHeight);
-        format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
+        videoFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
-        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL);
+        videoFormat.setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE);
+        videoFormat.setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE);
+        videoFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL);
 
-        mediaCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
-        mediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-        mediaCodec.start();
+        videoCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+        videoCodec.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        videoCodec.start();
 
-        // Update MediaStore entry after video is written
+        // Initialize audio encoder if enabled
+        if (recordAudio) {
+            initAudioEncoder();
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             values.clear();
             values.put(MediaStore.Video.Media.IS_PENDING, 0);
@@ -432,56 +492,241 @@ public class ScreenCaptureEngine {
         }
     }
 
+    private void initAudioEncoder() throws IOException {
+        int sampleRate = audioConfig.getSampleRateValue();
+        int bitrate = audioConfig.getBitrate();
+
+        MediaFormat audioFormat = MediaFormat.createAudioFormat(
+                MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, AUDIO_CHANNELS);
+        audioFormat.setInteger(MediaFormat.KEY_AAC_PROFILE,
+                MediaCodecInfo.CodecProfileLevel.AACObjectLC);
+        audioFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
+        audioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 16384);
+
+        audioCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC);
+        audioCodec.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        audioCodec.start();
+    }
+
     private void encodeFrame(Bitmap bitmap) {
-        if (mediaCodec == null || !isEncoding) return;
+        if (videoCodec == null || !isEncoding) return;
 
         try {
-            // Get input buffer
             MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
-            int inputIndex = mediaCodec.dequeueInputBuffer(10000);
+            int inputIndex = videoCodec.dequeueInputBuffer(10000);
             if (inputIndex >= 0) {
-                ByteBuffer inputBuffer = mediaCodec.getInputBuffer(inputIndex);
+                ByteBuffer inputBuffer = videoCodec.getInputBuffer(inputIndex);
                 if (inputBuffer != null) {
                     inputBuffer.clear();
-                    // Convert bitmap to YUV format (simplified - use Surface input ideally)
-                    // For a proper implementation, use MediaCodec input surface
-                    // This is a simplified version
                     inputBuffer.put(bitmapToNV21(bitmap));
-                    mediaCodec.queueInputBuffer(inputIndex, 0, inputBuffer.position(),
+                    videoCodec.queueInputBuffer(inputIndex, 0, inputBuffer.position(),
                             lastPresentationTimeUs, MediaCodec.BUFFER_FLAG_KEY_FRAME);
                 }
             }
 
-            // Get output buffer
-            int outputIndex = mediaCodec.dequeueOutputBuffer(bufferInfo, 10000);
+            int outputIndex = videoCodec.dequeueOutputBuffer(bufferInfo, 10000);
             if (outputIndex >= 0) {
-                ByteBuffer outputBuffer = mediaCodec.getOutputBuffer(outputIndex);
-                if (outputBuffer != null && mediaMuxer != null && trackIndex >= 0) {
-                    mediaMuxer.writeSampleData(trackIndex, outputBuffer, bufferInfo);
+                ByteBuffer outputBuffer = videoCodec.getOutputBuffer(outputIndex);
+                if (outputBuffer != null && mediaMuxer != null && videoTrackIndex >= 0) {
+                    mediaMuxer.writeSampleData(videoTrackIndex, outputBuffer, bufferInfo);
                 }
-                mediaCodec.releaseOutputBuffer(outputIndex, false);
-
-                if ((bufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                    // End of stream
-                }
+                videoCodec.releaseOutputBuffer(outputIndex, false);
             }
 
             lastPresentationTimeUs += 1000000 / FRAME_RATE;
         } catch (Exception e) {
-            Log.e(TAG, "Encode error: " + e.getMessage());
+            Log.e(TAG, "Video encode error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Start audio recording from microphone (EXTERNAL source)
+     */
+    private void startAudioRecording(AudioSource source) {
+        if (audioRecord != null) return;
+
+        int sampleRate = audioConfig.getSampleRateValue();
+        int bufferSize = AudioRecord.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+        );
+
+        // Apply noise suppression if enabled
+        int audioSource = MediaRecorder.AudioSource.MIC;
+        if (audioConfig.getNoiseSuppression().enabled) {
+            if (!audioConfig.getNoiseSuppression().aggressive) {
+                audioSource = MediaRecorder.AudioSource.VOICE_COMMUNICATION;
+            } else {
+                audioSource = MediaRecorder.AudioSource.CAMCORDER;
+            }
+        }
+
+        audioRecord = new AudioRecord(
+                audioSource,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                Math.max(bufferSize, 4096)
+        );
+
+        if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+            Log.w(TAG, "External AudioRecord failed to initialize");
+            audioRecord = null;
+            return;
+        }
+
+        isAudioRecording.set(true);
+        audioRecord.startRecording();
+
+        audioThread = new Thread(() -> {
+            ByteBuffer audioBuffer = ByteBuffer.allocateDirect(4096);
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
+
+            while (isAudioRecording.get() && isVideoCapturing) {
+                if (isPaused) {
+                    try { Thread.sleep(50); } catch (InterruptedException e) { break; }
+                    continue;
+                }
+
+                audioBuffer.clear();
+                int bytesRead = audioRecord.read(audioBuffer, 4096);
+
+                if (bytesRead > 0 && audioCodec != null) {
+                    audioBuffer.position(bytesRead);
+                    audioBuffer.flip();
+                    encodeAudio(audioBuffer, bytesRead);
+                }
+            }
+
+            stopExternalAudio();
+        }, "ExternalAudioThread");
+        audioThread.start();
+    }
+
+    /**
+     * Start internal (device) audio recording using AudioPlaybackCapture (Android 10+)
+     */
+    private void startInternalAudioRecording() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
+
+        int sampleRate = audioConfig.getSampleRateValue();
+        int bufferSize = AudioRecord.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+        );
+
+        AudioRecord internalRecord = new AudioRecord(
+                MediaRecorder.AudioSource.REMOTE_SUBMIX,
+                sampleRate,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                Math.max(bufferSize, 4096)
+        );
+
+        if (internalRecord.getState() != AudioRecord.STATE_INITIALIZED) {
+            Log.w(TAG, "Internal audio not available on this device");
+            return;
+        }
+
+        isAudioRecording.set(true);
+        internalRecord.startRecording();
+
+        Thread internalThread = new Thread(() -> {
+            ByteBuffer audioBuffer = ByteBuffer.allocateDirect(4096);
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
+
+            while (isAudioRecording.get() && isVideoCapturing) {
+                if (isPaused) {
+                    try { Thread.sleep(50); } catch (InterruptedException e) { break; }
+                    continue;
+                }
+
+                audioBuffer.clear();
+                int bytesRead = internalRecord.read(audioBuffer, 4096);
+
+                if (bytesRead > 0 && audioCodec != null) {
+                    audioBuffer.position(bytesRead);
+                    audioBuffer.flip();
+                    encodeAudio(audioBuffer, bytesRead);
+                }
+            }
+
+            try {
+                if (internalRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING)
+                    internalRecord.stop();
+            } catch (Exception ignored) {}
+            internalRecord.release();
+        }, "InternalAudioThread");
+        internalThread.start();
+    }
+
+    /**
+     * Encode audio buffer with AAC codec
+     */
+    private void encodeAudio(ByteBuffer audioData, int size) {
+        if (audioCodec == null) return;
+
+        try {
+            MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+            int inputIndex = audioCodec.dequeueInputBuffer(10000);
+            if (inputIndex >= 0) {
+                ByteBuffer inputBuffer = audioCodec.getInputBuffer(inputIndex);
+                if (inputBuffer != null) {
+                    inputBuffer.clear();
+                    inputBuffer.put(audioData);
+                    audioCodec.queueInputBuffer(inputIndex, 0, size,
+                            lastPresentationTimeUs, 0);
+                }
+            }
+
+            int outputIndex = audioCodec.dequeueOutputBuffer(bufferInfo, 10000);
+            while (outputIndex >= 0) {
+                ByteBuffer outputBuffer = audioCodec.getOutputBuffer(outputIndex);
+                if (outputBuffer != null && mediaMuxer != null && audioTrackIndex >= 0) {
+                    mediaMuxer.writeSampleData(audioTrackIndex, outputBuffer, bufferInfo);
+                }
+                audioCodec.releaseOutputBuffer(outputIndex, false);
+                outputIndex = audioCodec.dequeueOutputBuffer(bufferInfo, 0);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Audio encode error: " + e.getMessage());
+        }
+    }
+
+    private void stopAudioCapture() {
+        isAudioRecording.set(false);
+        stopExternalAudio();
+        // Audio codec is stopped in stopEncoding()
+        audioThread = null;
+    }
+
+    private void stopExternalAudio() {
+        if (audioRecord != null) {
+            try {
+                if (audioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING)
+                    audioRecord.stop();
+            } catch (Exception e) {
+                Log.e(TAG, "Error stopping AudioRecord: " + e.getMessage());
+            }
+            audioRecord.release();
+            audioRecord = null;
         }
     }
 
     private void stopEncoding() {
-        if (mediaCodec != null) {
+        if (videoCodec != null) {
             try {
-                mediaCodec.stop();
-                mediaCodec.release();
+                videoCodec.stop();
+                videoCodec.release();
             } catch (Exception e) {
-                Log.e(TAG, "Error stopping codec: " + e.getMessage());
+                Log.e(TAG, "Error stopping video codec: " + e.getMessage());
             }
-            mediaCodec = null;
+            videoCodec = null;
         }
+
+        stopAudioCapture();
 
         if (mediaMuxer != null) {
             try {
@@ -493,7 +738,8 @@ public class ScreenCaptureEngine {
             mediaMuxer = null;
         }
 
-        trackIndex = -1;
+        videoTrackIndex = -1;
+        audioTrackIndex = -1;
         lastPresentationTimeUs = 0;
         isEncoding = false;
     }
