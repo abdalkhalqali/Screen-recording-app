@@ -120,156 +120,173 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         try {
-        setContentView(R.layout.activity_main);
-        } catch (Exception e) {
-            Log.e(TAG, "LAYOUT INFLATION FAILED: " + e, e);
-            String msg = e.getMessage();
-            if (msg == null) msg = e.getClass().getSimpleName();
-            Toast.makeText(this, "🔴 خطأ في تحميل الواجهة: " + msg, Toast.LENGTH_LONG).show();
-            finish();
-            return;
-        }
-        mHandler = new Handler(Looper.getMainLooper());
+            setContentView(R.layout.activity_main);
 
-        // Register ALL activity result launchers HERE (before STARTED state)
-        requestPermissionLauncher = registerForActivityResult(
-                new ActivityResultContracts.RequestPermission(), isGranted -> {
-                    checkAllPermissionsAndUpdateUI();
-                    if (isGranted) Log.d(TAG, "Permission granted");
+            mHandler = new Handler(Looper.getMainLooper());
+
+            // Register ALL activity result launchers HERE (before STARTED state)
+            requestPermissionLauncher = registerForActivityResult(
+                    new ActivityResultContracts.RequestPermission(), isGranted -> {
+                        checkAllPermissionsAndUpdateUI();
+                        if (isGranted) Log.d(TAG, "Permission granted");
+                    });
+
+            overlaySettingsLauncher = registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(), result ->
+                            checkAllPermissionsAndUpdateUI());
+
+            startMediaProjectionActivity = registerForActivityResult(
+                    new ActivityResultContracts.StartActivityForResult(), result -> {
+                        if (result == null) return;
+                        int resultCode = result.getResultCode();
+                        if (resultCode == Activity.RESULT_OK) {
+                            Intent data = result.getData();
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                                MediaProjectionManager pm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                                if (pm != null) {
+                                    mMediaProjection = pm.getMediaProjection(resultCode, data);
+                                    if (mMediaProjection != null) startScreenCapture();
+                                }
+                            } else {
+                                try {
+                                    Intent si = new Intent(this, MyMediaProjectionService.class);
+                                    si.putExtra("resultCode", resultCode);
+                                    si.putExtra("data", data);
+                                    ContextCompat.startForegroundService(this, si);
+                                } catch (RuntimeException e) { Log.w(TAG, "Error: " + e.getMessage()); }
+                            }
+                        } else Toast.makeText(this, getString(R.string.permission_denied), Toast.LENGTH_SHORT).show();
+                    });
+
+            // Init settings
+            settingsPrefs = new SettingsPrefs(this);
+
+            // Init views (MUST be before loadSavedSettings!)
+            mSurfaceView = findViewById(R.id.surface);
+            regionOverlay = findViewById(R.id.regionOverlay);
+            mButtonToggle = findViewById(R.id.button);
+            modeToggleGroup = findViewById(R.id.modeToggle);
+            captureInfoPanel = findViewById(R.id.captureInfoPanel);
+            captureInfoText = findViewById(R.id.captureInfoText);
+            controlPanel = findViewById(R.id.controlPanel);
+            btnScreenshotQuick = findViewById(R.id.btnScreenshotQuick);
+            btnMic = findViewById(R.id.btnMic);
+            btnSettings = findViewById(R.id.btnSettings);
+            btnGallery = findViewById(R.id.btnGallery);
+            btnTimer = findViewById(R.id.btnTimer);
+            btnLock = findViewById(R.id.btnLock);
+            btnResolution = findViewById(R.id.btnResolution);
+            permissionStatusBar = findViewById(R.id.permissionStatusBar);
+            permissionStatusText = findViewById(R.id.permissionStatusText);
+            permissionDot = findViewById(R.id.permissionDot);
+
+            // Load saved settings NOW (after all views are initialized)
+            loadSavedSettings();
+
+            if (permissionStatusBar != null)
+                permissionStatusBar.setOnClickListener(v -> onPermissionStatusBarClick());
+
+            if (mSurfaceView != null) {
+                mSurface = mSurfaceView.getHolder() != null ? mSurfaceView.getHolder().getSurface() : null;
+            }
+
+            if (regionOverlay != null) {
+                regionOverlay.setOnRegionChangedListener(region -> {
+                    if (captureEngine != null)
+                        captureEngine.setCaptureRegion(regionOverlay.getNormalizedRegion());
+                    updateCaptureInfo();
                 });
+            }
 
-        overlaySettingsLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(), result ->
-                        checkAllPermissionsAndUpdateUI());
-
-        startMediaProjectionActivity = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(), result -> {
-                    int resultCode = result.getResultCode();
-                    if (resultCode == Activity.RESULT_OK) {
-                        Intent data = result.getData();
-                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                            MediaProjectionManager pm = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                            mMediaProjection = pm.getMediaProjection(resultCode, data);
-                            if (mMediaProjection != null) startScreenCapture();
-                        } else {
-                            try {
-                                Intent si = new Intent(this, MyMediaProjectionService.class);
-                                si.putExtra("resultCode", resultCode);
-                                si.putExtra("data", data);
-                                ContextCompat.startForegroundService(this, si);
-                            } catch (RuntimeException e) { Log.w(TAG, "Error: " + e.getMessage()); }
-                        }
-                    } else Toast.makeText(this, getString(R.string.permission_denied), Toast.LENGTH_SHORT).show();
+            if (modeToggleGroup != null) {
+                modeToggleGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+                    if (!isChecked) return;
+                    if (checkedId == R.id.modeScreenshot) currentMode = CaptureMode.SCREENSHOT;
+                    else if (checkedId == R.id.modeVideo) currentMode = CaptureMode.VIDEO;
+                    else if (checkedId == R.id.modeBoth) currentMode = CaptureMode.BOTH;
+                    updateCaptureInfo();
                 });
+                modeToggleGroup.check(R.id.modeBoth);
 
-        // Init settings
-        settingsPrefs = new SettingsPrefs(this);
+                // Restore saved capture mode safely
+                int savedMode = settingsPrefs != null ? settingsPrefs.getCaptureMode(2) : 2;
+                if (savedMode == 0) modeToggleGroup.check(R.id.modeScreenshot);
+                else if (savedMode == 1) modeToggleGroup.check(R.id.modeVideo);
+                else modeToggleGroup.check(R.id.modeBoth);
+                if (savedMode >= 0 && savedMode < CaptureMode.values().length) {
+                    currentMode = CaptureMode.values()[savedMode];
+                } else {
+                    currentMode = CaptureMode.BOTH;
+                }
+            }
 
-        // Init views (MUST be before loadSavedSettings!)
-        mSurfaceView = findViewById(R.id.surface);
-        regionOverlay = findViewById(R.id.regionOverlay);
-        mButtonToggle = findViewById(R.id.button);
-        modeToggleGroup = findViewById(R.id.modeToggle);
-        captureInfoPanel = findViewById(R.id.captureInfoPanel);
-        captureInfoText = findViewById(R.id.captureInfoText);
-        controlPanel = findViewById(R.id.controlPanel);
-        btnScreenshotQuick = findViewById(R.id.btnScreenshotQuick);
-        btnMic = findViewById(R.id.btnMic);
-        btnSettings = findViewById(R.id.btnSettings);
-        btnGallery = findViewById(R.id.btnGallery);
-        btnTimer = findViewById(R.id.btnTimer);
-        btnLock = findViewById(R.id.btnLock);
-        btnResolution = findViewById(R.id.btnResolution);
-        permissionStatusBar = findViewById(R.id.permissionStatusBar);
-        permissionStatusText = findViewById(R.id.permissionStatusText);
-        permissionDot = findViewById(R.id.permissionDot);
+            // Main button
+            if (mButtonToggle != null) {
+                mButtonToggle.setOnClickListener(view -> {
+                    if (!isRecording) {
+                        if (!permissionsReady) { checkAllPermissionsAndUpdateUI(); return; }
+                        if (delaySeconds > 0) startDelayTimer();
+                        else requestScreenCapturePermission();
+                    } else stopCapture();
+                });
+            }
 
-        // Load saved settings NOW (after all views are initialized)
-        loadSavedSettings();
-
-        if (permissionStatusBar != null)
-            permissionStatusBar.setOnClickListener(v -> onPermissionStatusBarClick());
-
-        mSurface = mSurfaceView.getHolder().getSurface();
-
-        regionOverlay.setOnRegionChangedListener(region -> {
-            if (captureEngine != null)
-                captureEngine.setCaptureRegion(regionOverlay.getNormalizedRegion());
-            updateCaptureInfo();
-        });
-
-        modeToggleGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
-            if (!isChecked) return;
-            if (checkedId == R.id.modeScreenshot) currentMode = CaptureMode.SCREENSHOT;
-            else if (checkedId == R.id.modeVideo) currentMode = CaptureMode.VIDEO;
-            else if (checkedId == R.id.modeBoth) currentMode = CaptureMode.BOTH;
-            updateCaptureInfo();
-        });
-        modeToggleGroup.check(R.id.modeBoth);
-
-        // Restore saved capture mode safely
-        int savedMode = settingsPrefs.getCaptureMode(2);
-        if (savedMode == 0) modeToggleGroup.check(R.id.modeScreenshot);
-        else if (savedMode == 1) modeToggleGroup.check(R.id.modeVideo);
-        else modeToggleGroup.check(R.id.modeBoth);
-        if (savedMode >= 0 && savedMode < CaptureMode.values().length) {
-            currentMode = CaptureMode.values()[savedMode];
-        } else {
-            currentMode = CaptureMode.BOTH;
-        }
-
-        // Main button
-        mButtonToggle.setOnClickListener(view -> {
-            if (!isRecording) {
-                if (!permissionsReady) { checkAllPermissionsAndUpdateUI(); return; }
-                if (delaySeconds > 0) startDelayTimer();
-                else requestScreenCapturePermission();
-            } else stopCapture();
-        });
-
-        // Audio source
-        btnMic.setOnClickListener(v -> {
-            ScreenCaptureEngine.AudioSource[] sources = ScreenCaptureEngine.AudioSource.values();
-            audioSourceMode = sources[(audioSourceMode.ordinal() + 1) % sources.length];
+            // Audio source
+            if (btnMic != null) {
+                btnMic.setOnClickListener(v -> {
+                    ScreenCaptureEngine.AudioSource[] sources = ScreenCaptureEngine.AudioSource.values();
+                    audioSourceMode = sources[(audioSourceMode.ordinal() + 1) % sources.length];
+                    updateAudioSourceButton();
+                    if (settingsPrefs != null) settingsPrefs.setAudioSource(audioSourceMode.ordinal());
+                });
+            }
             updateAudioSourceButton();
-            settingsPrefs.setAudioSource(audioSourceMode.ordinal());
-        });
-        updateAudioSourceButton();
 
-        // Settings button - choose Audio or Video settings
-        btnSettings.setOnClickListener(v -> showSettingsChoiceDialog());
+            // Settings button - choose Audio or Video settings
+            if (btnSettings != null) btnSettings.setOnClickListener(v -> showSettingsChoiceDialog());
 
-        // Screenshot quick
-        btnScreenshotQuick.setOnClickListener(v -> {
-            if (captureEngine != null && mMediaProjection != null && !isRecording) {
-                captureEngine.captureScreenshot(displayWidth, displayHeight);
-                animateButton(v);
-            } else if (isRecording) takeScreenshotDuringRecording();
-            else Toast.makeText(this, getString(R.string.start_first), Toast.LENGTH_SHORT).show();
-        });
+            // Screenshot quick
+            if (btnScreenshotQuick != null) {
+                btnScreenshotQuick.setOnClickListener(v -> {
+                    if (captureEngine != null && mMediaProjection != null && !isRecording) {
+                        captureEngine.captureScreenshot(displayWidth, displayHeight);
+                        animateButton(v);
+                    } else if (isRecording) takeScreenshotDuringRecording();
+                    else Toast.makeText(this, getString(R.string.start_first), Toast.LENGTH_SHORT).show();
+                });
+            }
 
-        // Gallery button
-        btnGallery.setOnClickListener(v -> {
-            Intent intent = new Intent(this, MediaGalleryActivity.class);
-            startActivity(intent);
-        });
+            // Gallery button
+            if (btnGallery != null) {
+                btnGallery.setOnClickListener(v -> {
+                    Intent intent = new Intent(this, MediaGalleryActivity.class);
+                    startActivity(intent);
+                });
+            }
 
-        // Timer button
-        btnTimer.setOnClickListener(v -> showTimerDialog());
+            // Timer button
+            if (btnTimer != null) btnTimer.setOnClickListener(v -> showTimerDialog());
 
-        // Lock region
-        btnLock.setOnClickListener(v -> toggleRegionLock());
+            // Lock region
+            if (btnLock != null) btnLock.setOnClickListener(v -> toggleRegionLock());
 
-        // Resolution
-        btnResolution.setOnClickListener(v -> showResolutionPicker());
+            // Resolution
+            if (btnResolution != null) btnResolution.setOnClickListener(v -> showResolutionPicker());
 
-        // Animate
-        controlPanel.setAlpha(0f);
-        controlPanel.setTranslationY(100f);
-        controlPanel.animate().alpha(1f).translationY(0f).setDuration(600).setStartDelay(200).start();
+            // Animate
+            if (controlPanel != null) {
+                controlPanel.setAlpha(0f);
+                controlPanel.setTranslationY(100f);
+                controlPanel.animate().alpha(1f).translationY(0f).setDuration(600).setStartDelay(200).start();
+            }
 
-        updateCaptureInfo();
-        mHandler.postDelayed(() -> checkAllPermissionsAndUpdateUI(), 500);
+            updateCaptureInfo();
+            mHandler.postDelayed(() -> checkAllPermissionsAndUpdateUI(), 500);
+        } catch (Throwable t) {
+            Log.e(TAG, "Startup crashed", t);
+            Toast.makeText(this, "🔴 خطأ أثناء فتح التطبيق: " + t.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+            finish();
+        }
     }
 
     @Override
@@ -435,6 +452,7 @@ public class MainActivity extends AppCompatActivity {
         if (secs == 300) return 3; if (secs == 600) return 4; return 5;
     }
     private void updateTimerButton() {
+        if (btnTimer == null) return;
         String text = "⏱️";
         if (delaySeconds > 0 || maxDurationSeconds > 0) {
             if (delaySeconds > 0) text += delaySeconds + "ث";
@@ -452,6 +470,7 @@ public class MainActivity extends AppCompatActivity {
         Toast.makeText(this, isRegionLocked ? R.string.region_locked : R.string.region_unlocked, Toast.LENGTH_SHORT).show();
     }
     private void updateLockButton() {
+        if (btnLock == null) return;
         btnLock.setText(isRegionLocked ? "🔒" : "🔓");
         btnLock.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                 isRegionLocked ? 0x1AEF4444 : 0x1A6366F1));
@@ -479,6 +498,7 @@ public class MainActivity extends AppCompatActivity {
                 }).setNegativeButton("إلغاء", null).show();
     }
     private void updateResolutionButton() {
+        if (btnResolution == null || currentResolution == null) return;
         btnResolution.setText(currentResolution.label.replace(" (HD)", "").replace(" (Full HD)", "").replace(" (SD)", ""));
     }
 
@@ -648,7 +668,10 @@ public class MainActivity extends AppCompatActivity {
         if (missing.length == 0) {
             permissionsReady = true;
             if (permissionStatusBar != null) permissionStatusBar.setVisibility(View.GONE);
-            mButtonToggle.setAlpha(1f); mButtonToggle.setEnabled(true);
+            if (mButtonToggle != null) {
+                mButtonToggle.setAlpha(1f);
+                mButtonToggle.setEnabled(true);
+            }
             return true;
         }
         if (permissionStatusBar != null) {
@@ -658,9 +681,12 @@ public class MainActivity extends AppCompatActivity {
                 msg.append(getPermissionDisplayName(missing[i]));
                 if (i < missing.length - 1) msg.append("، ");
             }
-            permissionStatusText.setText(msg.toString());
+            if (permissionStatusText != null) permissionStatusText.setText(msg.toString());
         }
-        mButtonToggle.setAlpha(1f); mButtonToggle.setEnabled(true);
+        if (mButtonToggle != null) {
+            mButtonToggle.setAlpha(1f);
+            mButtonToggle.setEnabled(true);
+        }
         return false;
     }
 
@@ -1038,13 +1064,17 @@ public class MainActivity extends AppCompatActivity {
             case EXTERNAL: btnMic.setText("🎤"); btnMic.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x1A22C55E)); break;
             case BOTH: btnMic.setText("🔊+🎤"); btnMic.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x1A8B5CF6)); break;
         }
-        Toast.makeText(this, "مصدر الصوت: " + audioSourceMode.getDisplayName(), Toast.LENGTH_SHORT).show();
+        try {
+            Toast.makeText(this, "مصدر الصوت: " + audioSourceMode.getDisplayName(), Toast.LENGTH_SHORT).show();
+        } catch (Exception ignored) {
+            // Ignore toast errors during startup
+        }
     }
 
     // ---- Capture Info ----
     private void updateCaptureInfo() {
+        if (captureInfoText == null || regionOverlay == null || currentResolution == null) return;
         RectF region = regionOverlay.getSelectedRegion();
-        RectF norm = regionOverlay.getNormalizedRegion();
         String modeText;
         switch (currentMode) { case SCREENSHOT: modeText = "لقطة"; break; case VIDEO: modeText = "فيديو"; break; case BOTH: modeText = "لقطة+فيديو"; break; default: modeText = ""; }
         captureInfoText.setText(String.format("📐 %s | %d×%d | %s",
