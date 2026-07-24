@@ -27,7 +27,7 @@ import android.view.animation.Animation;
 import android.view.animation.ScaleAnimation;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.ImageButton;
+
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -62,13 +62,12 @@ public class MainActivity extends AppCompatActivity {
 
     private SurfaceView mSurfaceView;
     private RegionOverlayView regionOverlay;
-    private FrameLayout overlayContainer;
     private Button mButtonToggle;
     private MaterialButtonToggleGroup modeToggleGroup;
     private LinearLayout captureInfoPanel;
     private TextView captureInfoText;
     private MaterialCardView controlPanel;
-    private ImageButton btnScreenshotQuick;
+    private MaterialButton btnScreenshotQuick;
     private MaterialButton btnMic, btnSettings, btnGallery, btnTimer, btnLock, btnResolution;
     private ScreenCaptureEngine.AudioSource audioSourceMode = ScreenCaptureEngine.AudioSource.EXTERNAL;
     private AudioConfig audioConfig = new AudioConfig();
