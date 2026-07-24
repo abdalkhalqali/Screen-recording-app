@@ -90,6 +90,7 @@ public class MainActivity extends AppCompatActivity {
     private int delaySeconds = 0;
     private int maxDurationSeconds = 0;
     private CountDownTimer delayTimer, autoStopTimer;
+    private ScreenCaptureEngine.AutoPauseMode autoPauseMode = ScreenCaptureEngine.AutoPauseMode.OFF;
 
     private int displayWidth = 720, displayHeight = 1280;
 
@@ -293,6 +294,9 @@ public class MainActivity extends AppCompatActivity {
     private void loadSavedSettings() {
         audioConfig = settingsPrefs.loadAudioConfig();
         videoConfig = settingsPrefs.loadVideoConfig();
+        int apOrd = settingsPrefs.getAutoPauseMode(ScreenCaptureEngine.AutoPauseMode.OFF.ordinal());
+        autoPauseMode = ScreenCaptureEngine.AutoPauseMode.values()[
+                Math.min(apOrd, ScreenCaptureEngine.AutoPauseMode.values().length - 1)];
         int sourceOrd = settingsPrefs.getAudioSource(ScreenCaptureEngine.AudioSource.EXTERNAL.ordinal());
         audioSourceMode = ScreenCaptureEngine.AudioSource.values()[
                 Math.min(sourceOrd, ScreenCaptureEngine.AudioSource.values().length - 1)];
@@ -483,6 +487,7 @@ public class MainActivity extends AppCompatActivity {
         captureEngine.setAudioSource(audioSourceMode);
         captureEngine.setAudioConfig(audioConfig);
         captureEngine.setVideoConfig(videoConfig);
+        captureEngine.setAutoPauseMode(autoPauseMode);
         captureEngine.setOnCaptureListener(new ScreenCaptureEngine.OnCaptureListener() {
             @Override public void onScreenshotSaved(Uri uri, String message) {
                 runOnUiThread(() -> { Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show(); showSavedNotification(uri, "image/*"); });
@@ -733,14 +738,32 @@ public class MainActivity extends AppCompatActivity {
                 .setItems(new String[]{
                         "🎤 إعدادات الصوت",
                         "🎬 إعدادات الفيديو",
+                        "🛑 إيقاف تلقائي: " + getAutoPauseLabel(),
                         "📊 الإحصائيات الحالية"
                 }, (dialog, which) -> {
                     if (which == 0) showAudioSettingsDialog();
                     else if (which == 1) showVideoSettingsDialog();
+                    else if (which == 2) cycleAutoPauseMode();
                     else showSettingsSummary();
                 })
                 .setNegativeButton("إغلاق", null)
                 .show();
+    }
+
+    private String getAutoPauseLabel() {
+        return autoPauseMode.label;
+    }
+
+    private void cycleAutoPauseMode() {
+        ScreenCaptureEngine.AutoPauseMode[] modes = ScreenCaptureEngine.AutoPauseMode.values();
+        autoPauseMode = modes[(autoPauseMode.ordinal() + 1) % modes.length];
+        settingsPrefs.setAutoPauseMode(autoPauseMode.ordinal());
+        if (captureEngine != null) captureEngine.setAutoPauseMode(autoPauseMode);
+        String msg = autoPauseMode.enabled
+                ? "🛑 إيقاف تلقائي: " + autoPauseMode.label
+                : "✅ تم إيقاف الإيقاف التلقائي";
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+        // Update the summary if showing
     }
 
     private void showSettingsSummary() {
@@ -754,12 +777,13 @@ public class MainActivity extends AppCompatActivity {
                         "💎 جودة الفيديو: " + videoConfig.getQuality().label + "\n" +
                         "🔑 I-Frame: " + videoConfig.getIFrameInterval().label + "\n" +
                         "🛡️ البروفايل: " + videoConfig.getCodecProfile().label + "\n" +
+                        "🛑 إيقاف تلقائي (حركة): " + autoPauseMode.label + "\n" +
                         "🔊 الصوت: " + audioSourceMode.getDisplayName() + "\n" +
                         "🎚️ العينة: " + audioConfig.getSampleRate().label + "\n" +
                         "🎧 جودة AAC: " + audioConfig.getQuality().label + "\n" +
                         "🔇 الضوضاء: " + audioConfig.getNoiseSuppression().label + "\n" +
                         "⏱️ تأخير: " + (delaySeconds > 0 ? delaySeconds + "ث" : "بدون") + "\n" +
-                        "⏰ إيقاف تلقائي: " + (maxDurationSeconds > 0 ? (maxDurationSeconds / 60) + "د" : "بدون")
+                        "⏰ إيقاف زمني: " + (maxDurationSeconds > 0 ? (maxDurationSeconds / 60) + "د" : "بدون")
                 )
                 .setPositiveButton("تم", null)
                 .show();

@@ -141,4 +141,17 @@
     <string name="codec_baseline">Baseline - توافق واسع</string>
     <string name="codec_main">Main - جودة متوسطة</string>
     <string name="codec_high">High - جودة عالية (افتراضي)</string>
+
+    <!-- Auto-Pause (Idle Detection) -->
+    <string name="auto_pause">🛑 إيقاف تلقائي عند الثبات</string>
+    <string name="auto_pause_desc">إيقاف التسجيل مؤقتاً عند عدم وجود حركة على الشاشة</string>
+    <string name="auto_pause_off">🚫 إيقاف</string>
+    <string name="auto_pause_sensitive">🔹 حساس</string>
+    <string name="auto_pause_balanced">🔸 متوازن</string>
+    <string name="auto_pause_relaxed">🔻 هادئ</string>
+    <string name="auto_pause_sensitive_desc">يكشف حتى الحركات الصغيرة (المؤشر، كتابة)</string>
+    <string name="auto_pause_balanced_desc">يتجاهل الحركات الخفيفة (الإطارات الثابتة)</string>
+    <string name="auto_pause_relaxed_desc">يوقف فقط عند الشاشات الثابتة تماماً</string>
+    <string name="auto_paused_notice">⏸️ إيقاف مؤقت تلقائي - الشاشة ثابتة</string>
+    <string name="auto_resumed_notice">▶️ استئناف تلقائي - تم اكتشاف حركة</string>
 </resources>

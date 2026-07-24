@@ -96,6 +96,128 @@ public class ScreenCaptureEngine {
     private byte[] yuvFrameBuffer;
     private byte[] croppedYuvBuffer;
 
+    // ===================== AUTO-PAUSE ON IDLE (Motion Detection) =====================
+
+    /** Auto-pause sensitivity modes */
+    public enum AutoPauseMode {
+        OFF("🚫 إيقاف", 0, false),
+        SENSITIVE("🔹 حساس", 10, true),
+        BALANCED("🔸 متوازن", 15, true),
+        RELAXED("🔻 هادئ", 25, true);
+
+        public final String label;
+        public final int threshold;   // Lower = more sensitive
+        public final boolean enabled;
+        AutoPauseMode(String label, int threshold, boolean enabled) {
+            this.label = label;
+            this.threshold = threshold;
+            this.enabled = enabled;
+        }
+    }
+
+    private AutoPauseMode autoPauseMode = AutoPauseMode.OFF;
+    private byte[] previousYSample;           // Subsampled Y from previous frame
+    private int frameCounter = 0;              // Counter for periodic sampling
+    private int idleFrameCount = 0;            // Consecutive idle frames
+    private boolean wasIdlePaused = false;     // Track if we auto-paused
+    private boolean wasIdle = false;           // Currently idle state
+    private static final int MOTION_CHECK_INTERVAL = 5;  // Check every N frames
+    private static final int Y_SAMPLE_STEP = 16;         // Subsampling step (every 16th pixel)
+    private static final int IDLE_TRIGGER_FRAMES = 4;    // Idle frames before pausing
+    private static final int MOVEMENT_RESUME_FRAMES = 2; // Motion frames before resuming
+
+    public void setAutoPauseMode(AutoPauseMode mode) { this.autoPauseMode = mode; }
+    public AutoPauseMode getAutoPauseMode() { return autoPauseMode; }
+
+    /**
+     * Detect motion by comparing subsampled Y (luma) planes.
+     * Uses Mean Absolute Difference (MAD) on 1/16th of pixels for speed.
+     * Returns true if significant motion is detected.
+     */
+    private boolean detectMotion(byte[] yuvData, int width, int height) {
+        if (yuvData == null || width <= 0 || height <= 0) return false;
+
+        int sampleW = width / Y_SAMPLE_STEP;
+        int sampleH = height / Y_SAMPLE_STEP;
+        int sampleSize = sampleW * sampleH;
+
+        // Extract subsample of Y plane
+        byte[] currentSample;
+        if (previousYSample == null || previousYSample.length != sampleSize) {
+            currentSample = new byte[sampleSize];
+            previousYSample = new byte[sampleSize];
+            // Fill current sample, keep previous as zeros (first frame = no motion)
+            int idx = 0;
+            for (int row = 0; row < height; row += Y_SAMPLE_STEP) {
+                int rowOffset = row * width;
+                for (int col = 0; col < width; col += Y_SAMPLE_STEP) {
+                    currentSample[idx++] = yuvData[rowOffset + col];
+                }
+            }
+            System.arraycopy(currentSample, 0, previousYSample, 0, sampleSize);
+            return true; // First frame = motion
+        }
+
+        currentSample = new byte[sampleSize];
+        int idx = 0;
+        for (int row = 0; row < height; row += Y_SAMPLE_STEP) {
+            int rowOffset = row * width;
+            for (int col = 0; col < width; col += Y_SAMPLE_STEP) {
+                currentSample[idx++] = yuvData[rowOffset + col];
+            }
+        }
+
+        // Calculate Mean Absolute Difference
+        long totalDiff = 0;
+        for (int i = 0; i < sampleSize; i++) {
+            int diff = (currentSample[i] & 0xFF) - (previousYSample[i] & 0xFF);
+            totalDiff += Math.abs(diff);
+        }
+        float avgDiff = (float) totalDiff / sampleSize;
+
+        // Store for next comparison
+        System.arraycopy(currentSample, 0, previousYSample, 0, sampleSize);
+
+        return avgDiff > autoPauseMode.threshold;
+    }
+
+    /**
+     * Check motion state and auto-pause/resume based on idle detection.
+     * Should be called from the frame listener for every frame.
+     */
+    private void checkAutoPause(byte[] yuvData, int width, int height) {
+        if (!autoPauseMode.enabled || !isVideoCapturing) return;
+
+        frameCounter++;
+        if (frameCounter % MOTION_CHECK_INTERVAL != 0) return;
+
+        boolean hasMotion = detectMotion(yuvData, width, height);
+
+        if (!hasMotion) {
+            idleFrameCount++;
+            if (!wasIdle && idleFrameCount >= IDLE_TRIGGER_FRAMES) {
+                wasIdle = true;
+                // Auto-pause if not already paused by user
+                if (!isPaused) {
+                    wasIdlePaused = true;
+                    pauseVideoCapture();
+                    Log.d(TAG, "Auto-paused due to inactivity");
+                }
+            }
+        } else {
+            idleFrameCount = 0;
+            if (wasIdle || wasIdlePaused) {
+                wasIdle = false;
+                // Auto-resume if we were auto-paused
+                if (wasIdlePaused && isPaused) {
+                    wasIdlePaused = false;
+                    resumeVideoCapture();
+                    Log.d(TAG, "Auto-resumed due to motion detected");
+                }
+            }
+        }
+    }
+
     public interface OnCaptureListener {
         void onScreenshotSaved(Uri uri, String message);
         void onVideoSaved(Uri uri, String message);
@@ -203,14 +325,22 @@ public class ScreenCaptureEngine {
         videoReader.setOnImageAvailableListener(reader -> {
             if (!isVideoCapturing && isEncoding) { stopEncoding(); return; }
             try (Image image = reader.acquireLatestImage()) {
-                if (image != null && isEncoding && !isPaused) {
+                if (image != null && isEncoding) {
                     // Direct YUV extraction - NO Bitmap creation
                     byte[] yuvData = imageToYuv420(image, displayWidth, displayHeight, yuvFrameBuffer);
                     if (yuvData != null) {
-                        byte[] croppedYuv = cropYuv420(yuvData, displayWidth, displayHeight,
-                                lastNormalizedRegion, croppedYuvBuffer);
-                        if (croppedYuv != null) {
-                            encodeYuvFrame(croppedYuv, finalCropW, finalCropH);
+                        // Auto-pause detection before cropping (on full frame for accuracy)
+                        if (autoPauseMode.enabled && isVideoCapturing) {
+                            checkAutoPause(yuvData, displayWidth, displayHeight);
+                        }
+
+                        // Only encode/crop if not paused
+                        if (!isPaused) {
+                            byte[] croppedYuv = cropYuv420(yuvData, displayWidth, displayHeight,
+                                    lastNormalizedRegion, croppedYuvBuffer);
+                            if (croppedYuv != null) {
+                                encodeYuvFrame(croppedYuv, finalCropW, finalCropH);
+                            }
                         }
                     }
                 }

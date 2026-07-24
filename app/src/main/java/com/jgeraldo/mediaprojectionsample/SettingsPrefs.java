@@ -26,6 +26,9 @@ public class SettingsPrefs {
     private static final String KEY_VIDEO_I_FRAME_INTERVAL = "video_i_frame_interval";
     private static final String KEY_VIDEO_CODEC_PROFILE = "video_codec_profile";
 
+    // Auto-Pause key
+    private static final String KEY_AUTO_PAUSE_MODE = "auto_pause_mode";
+
     private static final String KEY_REGION_LOCKED = "region_locked";
     private static final String KEY_REGION_LEFT = "region_left";
     private static final String KEY_REGION_TOP = "region_top";
@@ -205,6 +208,14 @@ public class SettingsPrefs {
                 Math.min(codecOrd, VideoConfig.CodecProfile.values().length - 1)];
 
         return new VideoConfig(fr, q, ifi, cp);
+    }
+
+    // --- Auto-Pause Mode ---
+    public void setAutoPauseMode(int ordinal) {
+        prefs.edit().putInt(KEY_AUTO_PAUSE_MODE, ordinal).apply();
+    }
+    public int getAutoPauseMode(int defaultVal) {
+        return prefs.getInt(KEY_AUTO_PAUSE_MODE, defaultVal);
     }
 
     /** Clear all settings */
