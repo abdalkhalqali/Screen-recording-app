@@ -5,35 +5,312 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#0F0F1A"
     tools:context=".MainActivity">
 
-    <TextView
-        android:id="@+id/textview"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/hello_world"
-        android:gravity="center"
+    <!-- Status Bar Spacer -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/topBar"
+        android:layout_width="0dp"
+        android:layout_height="56dp"
+        android:background="#1A1A2E"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent">
 
-    <SurfaceView
-        android:id="@+id/surface"
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="@string/app_name"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/permissionDot"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <TextView
+            android:id="@+id/permissionDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/permission_dot_green"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Permission Status Bar -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/permissionStatusBar"
+        android:layout_width="0dp"
+        android:layout_height="40dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone"
+        app:cardBackgroundColor="#33F59E0B"
+        app:cardCornerRadius="0dp"
+        app:cardElevation="2dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:strokeColor="#40F59E0B"
+        app:strokeWidth="0.5dp">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingHorizontal="16dp">
+
+            <TextView
+                android:id="@+id/permissionStatusText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="⚠️ أذونات مفقودة"
+                android:textColor="#FBBF24"
+                android:textSize="13sp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toStartOf="@id/permissionActionBtn"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/permissionActionBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:backgroundTint="#30F59E0B"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="4dp"
+                android:text="منح الإذن"
+                android:textColor="#FBBF24"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Preview Container -->
+    <FrameLayout
+        android:id="@+id/previewContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toTopOf="@id/button"
+        android:layout_margin="8dp"
+        android:background="#1C1C2E"
+        android:clipChildren="false"
+        android:elevation="4dp"
+        app:layout_constraintBottom_toTopOf="@id/controlPanel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/textview" />
+        app:layout_constraintTop_toBottomOf="@id/permissionStatusBar">
 
-    <Button
-        android:id="@+id/button"
-        android:layout_width="wrap_content"
+        <SurfaceView
+            android:id="@+id/surface"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible" />
+
+        <!-- Region Selection Overlay -->
+        <com.jgeraldo.mediaprojectionsample.RegionOverlayView
+            android:id="@+id/regionOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible" />
+
+        <!-- Permission Status Bar (if no missing) -->
+        <LinearLayout
+            android:id="@+id/permissionBadgeReady"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|start"
+            android:layout_margin="8dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:visibility="gone"
+            android:background="@drawable/permission_badge_bg">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                android:text="✅"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="جميع الأذونات ممنوحة"
+                android:textColor="#22C55E"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Capture Info Overlay -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/captureInfoPanel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="#CC1A1A2E"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            app:strokeColor="#406366F1"
+            app:strokeWidth="1dp">
+
+            <TextView
+                android:id="@+id/captureInfoText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="8dp"
+                android:text="لقطة + فيديو | 720×1280 بكسل"
+                android:textColor="#A5B4FC"
+                android:textSize="12sp" />
+        </com.google.android.material.card.MaterialCardView>
+    </FrameLayout>
+
+    <!-- Control Panel -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/controlPanel"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="@string/button_start"
+        android:layout_margin="8dp"
+        app:cardBackgroundColor="#1A1A2E"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="8dp"
+        app:contentPadding="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/surface" />
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <!-- Mode Selection -->
+            <TextView
+                android:id="@+id/labelMode"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="نوع الالتقاط:"
+                android:textColor="#8899AA"
+                android:textSize="12sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/modeToggle"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_marginTop="28dp"
+                android:gravity="center"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/modeScreenshot"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="🖼️ لقطة"
+                    android:textSize="13sp"
+                    app:icon="@null" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/modeVideo"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="🎬 فيديو"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/modeBoth"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="✨ كليهما"
+                    android:textSize="13sp" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <!-- Action Buttons Row -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:orientation="horizontal"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/modeToggle">
+
+                <!-- Quick Screenshot Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnScreenshotQuick"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:visibility="gone"
+                    app:cornerRadius="16dp"
+                    app:icon="@android:drawable/ic_menu_camera"
+                    app:iconGravity="textStart"
+                    app:iconSize="24dp" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <!-- Main Toggle Button -->
+                <Button
+                    android:id="@+id/button"
+                    android:layout_width="120dp"
+                    android:layout_height="56dp"
+                    android:background="@drawable/start_button_bg"
+                    android:elevation="4dp"
+                    android:shadowColor="#406366F1"
+                    android:shadowDx="0"
+                    android:shadowDy="4"
+                    android:shadowRadius="12"
+                    android:text="@string/button_start"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1" />
+
+                <!-- Settings Button (placeholder) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnSettings"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:visibility="gone"
+                    app:cornerRadius="16dp"
+                    app:icon="@android:drawable/ic_menu_manage"
+                    app:iconGravity="textStart"
+                    app:iconSize="24dp" />
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,63 +1,103 @@
 package com.jgeraldo.mediaprojectionsample;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.graphics.RectF;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import com.jgeraldo.mediaprojectionsample.R;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceView;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.ScaleAnimation;
 import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import com.google.android.material.button.MaterialButtonToggleGroup;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+
 public class MainActivity extends AppCompatActivity {
 
-    public static final String ACTION_MEDIA_PROJECTION_STARTED = "com.jgeraldo.mediaprojectionsample.ACTION_MEDIA_PROJECTION_STARTED";
-
+    public static final String ACTION_MEDIA_PROJECTION_STARTED =
+            "com.jgeraldo.mediaprojectionsample.ACTION_MEDIA_PROJECTION_STARTED";
     public static final String TAG = "MediaProjectionSample";
 
+    // Capture modes
+    private enum CaptureMode { SCREENSHOT, VIDEO, BOTH }
+
     private boolean isReceiverRegistered = false;
+    private boolean isRecording = false;
 
     private MediaProjectionManager mediaProjectionManager;
-
     private MediaProjection mMediaProjection;
-
     private VirtualDisplay mVirtualDisplay;
 
+    private SurfaceView mSurfaceView;
+    private RegionOverlayView regionOverlay;
+    private FrameLayout overlayContainer;
     private Button mButtonToggle;
+    private MaterialButtonToggleGroup modeToggleGroup;
+    private LinearLayout captureInfoPanel;
+    private TextView captureInfoText;
+    private MaterialCardView controlPanel;
+    private ImageButton btnScreenshotQuick, btnSettings;
 
     private Surface mSurface;
-
     private Handler mHandler;
-
     private ActivityResultLauncher<Intent> startMediaProjectionActivity;
+    private ActivityResultLauncher<String> requestPermissionLauncher;
+    private ActivityResultLauncher<Intent> overlaySettingsLauncher;
 
-    // Creating a custom BroadcastReceiver class so we can use it externally without needing to declare on the Manifest.
-    // The only reason we are using a Broadcast here is to guarantee that we'll only get the MediaProjection instance
-    //  when the service has started (otherwise it would throw an exception) and also because we want to show the
-    //  shared screen in a SurfaceView hosted on this Activity's (so we couldn't access it from the service directly).
+    private ScreenCaptureEngine captureEngine;
+    private CaptureMode currentMode = CaptureMode.BOTH;
+
+    // For tracking display dimensions
+    private int displayWidth = 720;
+    private int displayHeight = 1280;
+
+    // Permission tracking
+    private static final int PERMISSION_REQUEST_NOTIFICATIONS = 1001;
+    private boolean isCheckingPermissions = false;
+    private View permissionStatusBar;
+    private TextView permissionStatusText;
+    private TextView permissionDot;
+    private boolean permissionsReady = false;
+
+    // BroadcastReceiver to handle service messages
     public class MyBroadcastReceiver extends BroadcastReceiver {
-
         @Override
         public void onReceive(Context context, Intent intent) {
             if (ACTION_MEDIA_PROJECTION_STARTED.equals(intent.getAction())) {
-                // Handle the message from the service
                 int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
                 Intent data = intent.getParcelableExtra("data");
 
@@ -66,7 +106,6 @@ public class MainActivity extends AppCompatActivity {
                 mMediaProjection = projectionManager.getMediaProjection(resultCode, data);
 
                 if (mMediaProjection != null) {
-                    // ---------------- STEP 4 ---------------------
                     startScreenCapture();
                 }
             }
@@ -80,19 +119,111 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        SurfaceView mSurfaceView = findViewById(R.id.surface);
-        mSurface = mSurfaceView.getHolder().getSurface();
-
         mHandler = new Handler(Looper.getMainLooper());
 
+        // Initialize views
+        mSurfaceView = findViewById(R.id.surface);
+        regionOverlay = findViewById(R.id.regionOverlay);
+        overlayContainer = findViewById(R.id.overlayContainer);
         mButtonToggle = findViewById(R.id.button);
+        modeToggleGroup = findViewById(R.id.modeToggle);
+        captureInfoPanel = findViewById(R.id.captureInfoPanel);
+        captureInfoText = findViewById(R.id.captureInfoText);
+        controlPanel = findViewById(R.id.controlPanel);
+        btnScreenshotQuick = findViewById(R.id.btnScreenshotQuick);
+        permissionStatusBar = findViewById(R.id.permissionStatusBar);
+        permissionStatusText = findViewById(R.id.permissionStatusText);
+        permissionDot = findViewById(R.id.permissionDot);
+
+        // Set click listener for permission status bar
+        if (permissionStatusBar != null) {
+            permissionStatusBar.setOnClickListener(v -> onPermissionStatusBarClick());
+        }
+
+        mSurface = mSurfaceView.getHolder().getSurface();
+
+        // Setup permission launcher
+        requestPermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(),
+                isGranted -> {
+                    checkAllPermissionsAndUpdateUI();
+                    if (isGranted) {
+                        Log.d(TAG, "Permission granted");
+                    }
+                }
+        );
+
+        // Setup overlay settings launcher
+        overlaySettingsLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    checkAllPermissionsAndUpdateUI();
+                }
+        );
+
+        // Setup region overlay
+        regionOverlay.setOnRegionChangedListener(region -> {
+            if (captureEngine != null) {
+                captureEngine.setCaptureRegion(
+                        regionOverlay.getNormalizedRegion());
+            }
+            updateCaptureInfo();
+        });
+
+        // Setup mode toggle
+        modeToggleGroup.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (!isChecked) return;
+            if (checkedId == R.id.modeScreenshot) {
+                currentMode = CaptureMode.SCREENSHOT;
+            } else if (checkedId == R.id.modeVideo) {
+                currentMode = CaptureMode.VIDEO;
+            } else if (checkedId == R.id.modeBoth) {
+                currentMode = CaptureMode.BOTH;
+            }
+            updateCaptureInfo();
+        });
+        // Default: select "BOTH" mode
+        modeToggleGroup.check(R.id.modeBoth);
+
+        // Main toggle button
         mButtonToggle.setOnClickListener(view -> {
-            if (mVirtualDisplay == null) {
+            if (!isRecording) {
+                if (!permissionsReady) {
+                    checkAllPermissionsAndUpdateUI();
+                    return;
+                }
                 requestScreenCapturePermission();
             } else {
-                stopScreenCapture();
+                stopCapture();
             }
         });
+
+        // Quick screenshot button
+        btnScreenshotQuick.setOnClickListener(v -> {
+            if (captureEngine != null && mMediaProjection != null && !isRecording) {
+                captureEngine.captureScreenshot(displayWidth, displayHeight);
+                animateButton(v);
+            } else if (isRecording) {
+                takeScreenshotDuringRecording();
+            } else {
+                Toast.makeText(this, getString(R.string.start_first), Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Animate controls in
+        controlPanel.setAlpha(0f);
+        controlPanel.setTranslationY(100f);
+        controlPanel.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(600)
+                .setStartDelay(200)
+                .start();
+
+        updateCaptureInfo();
+
+        // Check permissions on start (delayed for UI readiness)
+        mHandler.postDelayed(() -> checkAllPermissionsAndUpdateUI(), 500);
     }
 
     @Override
@@ -102,14 +233,12 @@ public class MainActivity extends AppCompatActivity {
         mediaProjectionManager = (MediaProjectionManager)
                 getSystemService(MEDIA_PROJECTION_SERVICE);
 
-        // tracks the createScreenCaptureIntent() result
         startMediaProjectionActivity =
                 registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
                         result -> {
                             int resultCode = result.getResultCode();
 
-                            // ---------------- STEP 2 ---------------------
-                            if (result.getResultCode() == Activity.RESULT_OK) {
+                            if (resultCode == Activity.RESULT_OK) {
                                 Intent data = result.getData();
 
                                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -118,7 +247,6 @@ public class MainActivity extends AppCompatActivity {
                                     mMediaProjection = projectionManager.getMediaProjection(resultCode, data);
 
                                     if (mMediaProjection != null) {
-                                        // ---------------- STEP 3 (prior Android 14) ---------------------
                                         startScreenCapture();
                                     }
                                 } else {
@@ -126,11 +254,9 @@ public class MainActivity extends AppCompatActivity {
                                         Intent serviceIntent = new Intent(this, MyMediaProjectionService.class);
                                         serviceIntent.putExtra("resultCode", resultCode);
                                         serviceIntent.putExtra("data", data);
-
-                                        // ---------------- STEP 3 (Android 14 and on) ---------------------
                                         ContextCompat.startForegroundService(this, serviceIntent);
                                     } catch (RuntimeException e) {
-                                        Log.w(TAG, "Error while trying to get the MediaProjection instance: " + e.getMessage());
+                                        Log.w(TAG, "Error: " + e.getMessage());
                                     }
                                 }
                             } else {
@@ -142,11 +268,12 @@ public class MainActivity extends AppCompatActivity {
         if (!isReceiverRegistered) {
             IntentFilter filter = new IntentFilter(ACTION_MEDIA_PROJECTION_STARTED);
             filter.addCategory(Intent.CATEGORY_DEFAULT);
-
-            Log.d(TAG, "REGISTERING RECEIVER <T");
             LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
             isReceiverRegistered = true;
         }
+
+        // Register floating control receiver
+        registerFloatingControlReceiver();
     }
 
     @Override
@@ -158,40 +285,135 @@ public class MainActivity extends AppCompatActivity {
             isReceiverRegistered = false;
         }
 
-        if (mMediaProjection != null) {
+        if (!isRecording && mMediaProjection != null) {
             mMediaProjection.stop();
             mMediaProjection = null;
+        }
+
+        // Unregister floating control receiver
+        unregisterFloatingControlReceiver();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (captureEngine != null) {
+            captureEngine.release();
+            captureEngine = null;
+        }
+        if (mVirtualDisplay != null) {
+            mVirtualDisplay.release();
+            mVirtualDisplay = null;
         }
     }
 
     private void requestScreenCapturePermission() {
-        // ---------------- STEP 1 ---------------------
         if (startMediaProjectionActivity != null) {
-            Log.d(TAG, "REQUESTING SCREEN CAPTURE INTENT PERMISSION");
             mediaProjectionManager = (MediaProjectionManager)
                     getSystemService(MEDIA_PROJECTION_SERVICE);
-
             Intent captureIntent = mediaProjectionManager.createScreenCaptureIntent();
-            Log.d(TAG, "CREATING THE SCREEN CAPTURE INTENT");
             startMediaProjectionActivity.launch(captureIntent);
         }
     }
 
-    public void startScreenCapture() {
+    private void startScreenCapture() {
+        if (mMediaProjection == null) return;
+
+        // Initialize capture engine
+        captureEngine = new ScreenCaptureEngine(mMediaProjection, getContentResolver());
+        captureEngine.setCaptureRegion(regionOverlay.getNormalizedRegion());
+        captureEngine.setOnCaptureListener(new ScreenCaptureEngine.OnCaptureListener() {
+            @Override
+            public void onScreenshotSaved(Uri uri, String message) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                    showSavedNotification(uri, "image/*");
+                });
+            }
+
+            @Override
+            public void onVideoSaved(Uri uri, String message) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                    showSavedNotification(uri, "video/*");
+                    isRecording = false;
+                    mButtonToggle.setText(R.string.button_start);
+                    regionOverlay.setVisibility(View.VISIBLE);
+                });
+            }
+
+            @Override
+            public void onCaptureError(String error) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+                    if (isRecording) {
+                        isRecording = false;
+                        mButtonToggle.setText(R.string.button_start);
+                        regionOverlay.setVisibility(View.VISIBLE);
+                    }
+                });
+            }
+
+            @Override
+            public void onRecordingStarted() {
+                runOnUiThread(() -> {
+                    isRecording = true;
+                    mButtonToggle.setText(R.string.button_stop);
+                    modeToggleGroup.setEnabled(false);
+                    regionOverlay.setVisibility(View.GONE);
+                    btnScreenshotQuick.setVisibility(View.VISIBLE);
+                    animateButton(mButtonToggle);
+                    // Show floating control
+                    showFloatingControl(false, 0);
+                });
+            }
+
+            @Override
+            public void onRecordingStopped() {
+                runOnUiThread(() -> {
+                    modeToggleGroup.setEnabled(true);
+                    btnScreenshotQuick.setVisibility(View.GONE);
+                    // Hide floating control
+                    hideFloatingControl();
+                });
+            }
+
+            @Override
+            public void onRecordingPaused() {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "⏸️ تم الإيقاف المؤقت", Toast.LENGTH_SHORT).show();
+                    mButtonToggle.setText("⏸️pause");
+                });
+            }
+
+            @Override
+            public void onRecordingResumed() {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "▶️ تم الاستئناف", Toast.LENGTH_SHORT).show();
+                    mButtonToggle.setText(R.string.button_stop);
+                });
+            }
+
+            @Override
+            public void onRecordingStateUpdated(boolean paused, long elapsedMs) {
+                runOnUiThread(() -> {
+                    updateFloatingState(paused, elapsedMs);
+                });
+            }
+        });
+
+        // Display the full screen in SurfaceView
         MediaProjection.Callback callback = new MediaProjection.Callback() {
             @Override
             public void onStop() {
                 super.onStop();
-                // Handle MediaProjection stopped event here
             }
         };
-
         mMediaProjection.registerCallback(callback, null);
 
         mVirtualDisplay = mMediaProjection.createVirtualDisplay(
                 getString(R.string.screen_capture_title),
-                720,
-                1080,
+                displayWidth, displayHeight,
                 getResources().getDisplayMetrics().densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY |
                         DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
@@ -199,17 +421,424 @@ public class MainActivity extends AppCompatActivity {
                 null,
                 mHandler);
 
-        mButtonToggle.setText(R.string.button_stop);
+        // Start capture based on mode
+        startCaptureByMode();
 
-        // Do whatever you need with the virtualDisplay
+        mButtonToggle.setText(R.string.button_stop);
     }
 
-    private void stopScreenCapture() {
-        if (mVirtualDisplay == null) {
+    private void startCaptureByMode() {
+        switch (currentMode) {
+            case SCREENSHOT:
+                captureEngine.captureScreenshot(displayWidth, displayHeight);
+                break;
+            case VIDEO:
+                captureEngine.startVideoCapture(displayWidth, displayHeight);
+                break;
+            case BOTH:
+                // Take screenshot first, then start video recording
+                captureEngine.setCaptureRegion(regionOverlay.getNormalizedRegion());
+                captureEngine.captureScreenshot(displayWidth, displayHeight);
+
+                // Start video after a short delay
+                mHandler.postDelayed(() -> {
+                    if (captureEngine != null) {
+                        captureEngine.setCaptureRegion(
+                                regionOverlay.getNormalizedRegion());
+                        captureEngine.startVideoCapture(displayWidth, displayHeight);
+                    }
+                }, 300);
+                break;
+        }
+    }
+
+    private void stopCapture() {
+        if (captureEngine != null && captureEngine.isCapturing()) {
+            captureEngine.stopVideoCapture();
+        } else {
+            // Not recording but has virtual display running
+            stopFullCapture();
+        }
+    }
+
+    private void stopFullCapture() {
+        if (mVirtualDisplay != null) {
+            mVirtualDisplay.release();
+            mVirtualDisplay = null;
+        }
+        if (mMediaProjection != null) {
+            mMediaProjection.stop();
+            mMediaProjection = null;
+        }
+        isRecording = false;
+        mButtonToggle.setText(R.string.button_start);
+        regionOverlay.setVisibility(View.VISIBLE);
+        modeToggleGroup.setEnabled(true);
+        hideFloatingControl();
+    }
+
+    private void takeScreenshotDuringRecording() {
+        if (captureEngine != null) {
+            captureEngine.setCaptureRegion(regionOverlay.getNormalizedRegion());
+            // For simplicity, log that screenshot was taken
+            Toast.makeText(this, "تم التقاط لقطة شاشة أثناء التسجيل", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // ---------- Permission System ----------
+
+    /**
+     * Check all required permissions and update UI accordingly.
+     * Returns true if all permissions are granted.
+     */
+    private boolean checkAllPermissionsAndUpdateUI() {
+        permissionsReady = false;
+        String[] missingPermissions = getMissingPermissions();
+
+        // Update the permission dot
+        if (permissionDot != null) {
+            if (missingPermissions.length == 0) {
+                permissionDot.setBackgroundResource(R.drawable.permission_dot_green);
+            } else {
+                permissionDot.setBackgroundResource(R.drawable.permission_dot_amber);
+            }
+        }
+
+        if (missingPermissions.length == 0) {
+            // All permissions granted
+            permissionsReady = true;
+            if (permissionStatusBar != null) {
+                permissionStatusBar.setVisibility(View.GONE);
+            }
+            mButtonToggle.setAlpha(1f);
+            mButtonToggle.setEnabled(true);
+            return true;
+        }
+
+        // Show permission status
+        if (permissionStatusBar != null) {
+            permissionStatusBar.setVisibility(View.VISIBLE);
+            StringBuilder msg = new StringBuilder("⚠️ ");
+            for (int i = 0; i < missingPermissions.length; i++) {
+                msg.append(getPermissionDisplayName(missingPermissions[i]));
+                if (i < missingPermissions.length - 1) msg.append("، ");
+            }
+            permissionStatusText.setText(msg.toString());
+        }
+
+        // Enable the button (still clickable to trigger request)
+        mButtonToggle.setAlpha(1f);
+        mButtonToggle.setEnabled(true);
+
+        return false;
+    }
+
+    /**
+     * Get all missing permissions (not granted yet)
+     */
+    private String[] getMissingPermissions() {
+        java.util.ArrayList<String> missing = new java.util.ArrayList<>();
+
+        // POST_NOTIFICATIONS (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.POST_NOTIFICATIONS);
+            }
+        }
+
+        // READ_MEDIA_IMAGES (Android 13+) or READ_EXTERNAL_STORAGE (Android 12-)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.READ_MEDIA_IMAGES);
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.READ_MEDIA_VIDEO);
+            }
+        } else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            // Only needed for Android 10 and below (scoped storage from 11)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            }
+        }
+
+        // SYSTEM_ALERT_WINDOW (for floating control)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                missing.add(Manifest.permission.SYSTEM_ALERT_WINDOW);
+            }
+        }
+
+        return missing.toArray(new String[0]);
+    }
+
+    /**
+     * Get user-friendly display name for a permission
+     */
+    private String getPermissionDisplayName(String permission) {
+        switch (permission) {
+            case Manifest.permission.POST_NOTIFICATIONS:
+                return "الإشعارات";
+            case Manifest.permission.READ_MEDIA_IMAGES:
+                return "قراءة الصور";
+            case Manifest.permission.READ_MEDIA_VIDEO:
+                return "قراءة الفيديو";
+            case Manifest.permission.WRITE_EXTERNAL_STORAGE:
+                return "التخزين";
+            case Manifest.permission.SYSTEM_ALERT_WINDOW:
+                return "النوافذ العائمة";
+            default:
+                return permission;
+        }
+    }
+
+    /**
+     * Start requesting all missing permissions one by one
+     */
+    private void requestAllPermissions() {
+        if (isCheckingPermissions) return;
+        isCheckingPermissions = true;
+
+        String[] missing = getMissingPermissions();
+        if (missing.length == 0) {
+            isCheckingPermissions = false;
+            checkAllPermissionsAndUpdateUI();
             return;
         }
-        mVirtualDisplay.release();
-        mVirtualDisplay = null;
-        mButtonToggle.setText(R.string.button_start);
+
+        // Show the first missing permission
+        requestPermissionWithExplanation(missing[0], 0);
     }
+
+    /**
+     * Request a specific permission with explanation dialog
+     */
+    private void requestPermissionWithExplanation(String permission, int index) {
+        String[] missing = getMissingPermissions();
+
+        if (permission.equals(Manifest.permission.SYSTEM_ALERT_WINDOW)) {
+            // SYSTEM_ALERT_WINDOW needs special intent, not normal request
+            showOverlayPermissionDialog();
+            return;
+        }
+
+        // Check if we should show explanation
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, permission)) {
+            // Show explanation dialog
+            showPermissionExplanationDialog(permission, () -> {
+                requestPermissionLauncher.launch(permission);
+                isCheckingPermissions = false;
+            });
+        } else {
+            // Request directly
+            requestPermissionLauncher.launch(permission);
+            isCheckingPermissions = false;
+        }
+    }
+
+    /**
+     * Show a Material dialog explaining why a permission is needed
+     */
+    private void showPermissionExplanationDialog(String permission, Runnable onConfirm) {
+        String title, message;
+        int icon;
+
+        switch (permission) {
+            case Manifest.permission.POST_NOTIFICATIONS:
+                title = "إذن الإشعارات";
+                message = "نحتاج إلى إذن الإشعارات حتى نتمكن من عرض إشعار التسجيل النشط والتحكم بالتسجيل من الخلفية.";
+                icon = android.R.drawable.ic_dialog_info;
+                break;
+            case Manifest.permission.READ_MEDIA_IMAGES:
+                title = "إذن قراءة الصور";
+                message = "نحتاج إلى هذا الإذن لحفظ لقطات الشاشة في معرض الصور الخاص بك.";
+                icon = android.R.drawable.ic_menu_camera;
+                break;
+            case Manifest.permission.READ_MEDIA_VIDEO:
+                title = "إذن قراءة الفيديو";
+                message = "نحتاج إلى هذا الإذن لحفظ تسجيلات الفيديو في معرض الفيديو.";
+                icon = android.R.drawable.ic_menu_gallery;
+                break;
+            case Manifest.permission.WRITE_EXTERNAL_STORAGE:
+                title = "إذن التخزين";
+                message = "نحتاج إلى الوصول للتخزين لحفظ لقطات الشاشة وتسجيلات الفيديو.";
+                icon = android.R.drawable.ic_menu_save;
+                break;
+            default:
+                title = "إذن مطلوب";
+                message = "هذا الإذن ضروري لتشغيل التطبيق بشكل صحيح.";
+                icon = android.R.drawable.ic_dialog_alert;
+        }
+
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .setIcon(icon)
+                .setTitle(title)
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton("✅ السماح", (dialog, which) -> {
+                    if (onConfirm != null) onConfirm.run();
+                })
+                .setNegativeButton("🚫 لاحقاً", (dialog, which) -> {
+                    isCheckingPermissions = false;
+                    checkAllPermissionsAndUpdateUI();
+                })
+                .show();
+    }
+
+    /**
+     * Show dialog for SYSTEM_ALERT_WINDOW (overlay) permission
+     */
+    private void showOverlayPermissionDialog() {
+        new MaterialAlertDialogBuilder(this, com.google.android.material.R.style.ThemeOverlay_Material3_Dialog_Alert)
+                .setIcon(android.R.drawable.ic_dialog_info)
+                .setTitle("إذن النوافذ العائمة")
+                .setMessage("نحتاج إلى إذن \"عرض فوق التطبيقات الأخرى\" حتى نتمكن من عرض لوحة التحكم العائمة أثناء التسجيل. \n\nسيتم تحويلك إلى الإعدادات لتفعيل هذا الإذن.")
+                .setCancelable(false)
+                .setPositiveButton("⚙️ فتح الإعدادات", (dialog, which) -> {
+                    Intent intent = new Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName())
+                    );
+                    overlaySettingsLauncher.launch(intent);
+                    isCheckingPermissions = false;
+                })
+                .setNegativeButton("🚫 لاحقاً", (dialog, which) -> {
+                    isCheckingPermissions = false;
+                    checkAllPermissionsAndUpdateUI();
+                })
+                .show();
+    }
+
+    /**
+     * Called when user clicks the permission status bar
+     */
+    private void onPermissionStatusBarClick() {
+        String[] missing = getMissingPermissions();
+        if (missing.length > 0) {
+            requestAllPermissions();
+        } else {
+            checkAllPermissionsAndUpdateUI();
+        }
+    }
+
+    // ---------- Capture Info ----------
+
+    private void updateCaptureInfo() {
+        RectF region = regionOverlay.getSelectedRegion();
+        RectF norm = regionOverlay.getNormalizedRegion();
+
+        String modeText;
+        switch (currentMode) {
+            case SCREENSHOT: modeText = "لقطة شاشة"; break;
+            case VIDEO: modeText = "تسجيل فيديو"; break;
+            case BOTH: modeText = "لقطة + فيديو"; break;
+            default: modeText = ""; break;
+        }
+
+        String info = String.format("📐 %s | %d×%d بكسل | %d%% من الشاشة",
+                modeText,
+                (int) region.width(),
+                (int) region.height(),
+                (int) (norm.width() * 100));
+        captureInfoText.setText(info);
+    }
+
+    private void animateButton(View v) {
+        ScaleAnimation anim = new ScaleAnimation(
+                1f, 0.9f, 1f, 0.9f,
+                v.getWidth() / 2f, v.getHeight() / 2f);
+        anim.setDuration(100);
+        anim.setRepeatCount(1);
+        anim.setRepeatMode(Animation.REVERSE);
+        v.startAnimation(anim);
+    }
+
+    private void showSavedNotification(Uri uri, String mimeType) {
+        Intent openIntent = new Intent(Intent.ACTION_VIEW);
+        openIntent.setDataAndType(uri, mimeType);
+        openIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        if (openIntent.resolveActivity(getPackageManager()) != null) {
+            startActivity(Intent.createChooser(openIntent, "فتح بـ"));
+        }
+    }
+
+    // ---------- Floating Control Integration ----------
+
+    private void showFloatingControl(boolean isPaused, long elapsedMs) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                // Request overlay permission
+                Intent intent = new Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName())
+                );
+                startActivity(intent);
+                Toast.makeText(this, "الرجاء السماح بعرض النوافذ العائمة", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+
+        Intent serviceIntent = new Intent(this, FloatingControlService.class);
+        serviceIntent.setAction(FloatingControlService.ACTION_SHOW_FLOATING);
+        serviceIntent.putExtra(FloatingControlService.EXTRA_IS_PAUSED, isPaused);
+        serviceIntent.putExtra(FloatingControlService.EXTRA_ELAPSED, elapsedMs);
+        ContextCompat.startForegroundService(this, serviceIntent);
+    }
+
+    private void hideFloatingControl() {
+        Intent intent = new Intent(this, FloatingControlService.class);
+        intent.setAction(FloatingControlService.ACTION_HIDE_FLOATING);
+        startService(intent);
+    }
+
+    private void updateFloatingState(boolean isPaused, long elapsedMs) {
+        Intent intent = new Intent(this, FloatingControlService.class);
+        intent.setAction(FloatingControlService.ACTION_SHOW_FLOATING);
+        intent.putExtra(FloatingControlService.EXTRA_IS_PAUSED, isPaused);
+        intent.putExtra(FloatingControlService.EXTRA_ELAPSED, elapsedMs);
+        startService(intent);
+    }
+
+    /**
+     * Register broadcast receiver for floating control actions (pause/resume/stop)
+     */
+    private void registerFloatingControlReceiver() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(FloatingControlService.ACTION_FLOATING_PAUSE);
+        filter.addAction(FloatingControlService.ACTION_FLOATING_RESUME);
+        filter.addAction(FloatingControlService.ACTION_FLOATING_STOP);
+        LocalBroadcastManager.getInstance(this).registerReceiver(floatingControlReceiver, filter);
+    }
+
+    private void unregisterFloatingControlReceiver() {
+        try {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(floatingControlReceiver);
+        } catch (Exception e) {
+            // Ignore
+        }
+    }
+
+    private final BroadcastReceiver floatingControlReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (FloatingControlService.ACTION_FLOATING_PAUSE.equals(action)) {
+                // Pause recording
+                if (captureEngine != null && captureEngine.isCapturing()) {
+                    captureEngine.pauseVideoCapture();
+                }
+            } else if (FloatingControlService.ACTION_FLOATING_RESUME.equals(action)) {
+                // Resume recording
+                if (captureEngine != null && captureEngine.isCapturing()) {
+                    captureEngine.resumeVideoCapture();
+                }
+            } else if (FloatingControlService.ACTION_FLOATING_STOP.equals(action)) {
+                // Stop recording
+                stopCapture();
+            }
+        }
+    };
 }
