@@ -124,9 +124,8 @@ public class MainActivity extends AppCompatActivity {
 
         // Init settings
         settingsPrefs = new SettingsPrefs(this);
-        loadSavedSettings();
 
-        // Init views
+        // Init views (MUST be before loadSavedSettings!)
         mSurfaceView = findViewById(R.id.surface);
         regionOverlay = findViewById(R.id.regionOverlay);
         mButtonToggle = findViewById(R.id.button);
@@ -144,6 +143,9 @@ public class MainActivity extends AppCompatActivity {
         permissionStatusBar = findViewById(R.id.permissionStatusBar);
         permissionStatusText = findViewById(R.id.permissionStatusText);
         permissionDot = findViewById(R.id.permissionDot);
+
+        // Load saved settings NOW (after all views are initialized)
+        loadSavedSettings();
 
         if (permissionStatusBar != null)
             permissionStatusBar.setOnClickListener(v -> onPermissionStatusBarClick());
