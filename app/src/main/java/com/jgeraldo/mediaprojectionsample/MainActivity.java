@@ -75,13 +75,45 @@ public class MainActivity extends AppCompatActivity {
     public class MyBroadcastReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (ACTION_MEDIA_PROJECTION_STARTED.equals(intent.getAction())) {
-                int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
+            if (!ACTION_MEDIA_PROJECTION_STARTED.equals(intent.getAction())) return;
+
+            int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
+            String error = intent.getStringExtra("error");
+
+            if (error != null) {
+                // خطأ من الخدمة نفسها
+                Log.e(TAG, "Service error: " + error);
+                Toast.makeText(MainActivity.this,
+                        "❌ فشل بدء الخدمة: " + error, Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            if (resultCode != Activity.RESULT_OK || intent.getParcelableExtra("data") == null) {
+                Log.w(TAG, "MediaProjection cancelled or no data");
+                return;
+            }
+
+            try {
                 Intent data = intent.getParcelableExtra("data");
                 MediaProjectionManager pm =
                         (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                if (pm == null) {
+                    Log.e(TAG, "MediaProjectionManager is null");
+                    return;
+                }
                 mMediaProjection = pm.getMediaProjection(resultCode, data);
-                if (mMediaProjection != null) startScreenCapture();
+                if (mMediaProjection != null) {
+                    Log.d(TAG, "✅ MediaProjection obtained successfully");
+                    startScreenCapture();
+                } else {
+                    Log.e(TAG, "MediaProjection is null after getMediaProjection");
+                    Toast.makeText(MainActivity.this,
+                            "❌ فشل الحصول على MediaProjection", Toast.LENGTH_SHORT).show();
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error getting MediaProjection: " + e.getMessage(), e);
+                Toast.makeText(MainActivity.this,
+                        "❌ خطأ: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
         }
     }
