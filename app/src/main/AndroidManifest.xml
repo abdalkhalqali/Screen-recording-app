@@ -46,6 +46,10 @@
         <service
             android:name=".MyMediaProjectionService"
             android:foregroundServiceType="mediaProjection" />
+
+        <service
+            android:name=".FloatingControlService"
+            android:foregroundServiceType="mediaProjection" />
     </application>
 
 </manifest>

@@ -81,6 +81,21 @@ public class MainActivity extends AppCompatActivity {
 
     private final MyBroadcastReceiver receiver = new MyBroadcastReceiver();
 
+    // مستقبل اللوحة العائمة
+    private final BroadcastReceiver floatingControlReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (FloatingControlService.ACTION_FLOATING_PAUSE.equals(action)) {
+                Toast.makeText(MainActivity.this, "⏸️ تم الإيقاف المؤقت", Toast.LENGTH_SHORT).show();
+            } else if (FloatingControlService.ACTION_FLOATING_RESUME.equals(action)) {
+                Toast.makeText(MainActivity.this, "▶️ تم الاستئناف", Toast.LENGTH_SHORT).show();
+            } else if (FloatingControlService.ACTION_FLOATING_STOP.equals(action)) {
+                stopScreenCapture();
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -168,6 +183,9 @@ public class MainActivity extends AppCompatActivity {
             LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
             isReceiverRegistered = true;
         }
+
+        // تسجيل مستقبل اللوحة العائمة
+        registerFloatingControlReceiver();
     }
 
     @Override
@@ -177,6 +195,10 @@ public class MainActivity extends AppCompatActivity {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
             isReceiverRegistered = false;
         }
+
+        // إلغاء تسجيل مستقبل اللوحة العائمة
+        unregisterFloatingControlReceiver();
+
         if (!isCapturing && mMediaProjection != null) {
             mMediaProjection.stop();
             mMediaProjection = null;
@@ -420,6 +442,9 @@ public class MainActivity extends AppCompatActivity {
 
         isCapturing = true;
         mButtonToggle.setText(R.string.button_stop);
+
+        // 🪟 إظهار اللوحة العائمة
+        showFloatingControl();
     }
 
     private void stopScreenCapture() {
@@ -429,5 +454,59 @@ public class MainActivity extends AppCompatActivity {
         mVirtualDisplay = null;
         isCapturing = false;
         mButtonToggle.setText(R.string.button_start);
+
+        // 🪟 إخفاء اللوحة العائمة
+        hideFloatingControl();
+    }
+
+    // ========== اللوحة العائمة ==========
+
+    private void showFloatingControl() {
+        try {
+            // 🛡️ التحقق من صلاحية النوافذ العائمة
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                    !Settings.canDrawOverlays(this)) {
+                // لم يتم تفعيل الصلاحية → سيطلبها شريط الأذونات
+                return;
+            }
+
+            Intent si = new Intent(this, FloatingControlService.class);
+            si.setAction(FloatingControlService.ACTION_SHOW_FLOATING);
+            ContextCompat.startForegroundService(this, si);
+        } catch (Exception e) {
+            Log.w(TAG, "فشل إظهار اللوحة العائمة: " + e.getMessage());
+        }
+    }
+
+    private void hideFloatingControl() {
+        try {
+            Intent si = new Intent(this, FloatingControlService.class);
+            si.setAction(FloatingControlService.ACTION_HIDE_FLOATING);
+            startService(si);
+        } catch (Exception e) {
+            Log.w(TAG, "فشل إخفاء اللوحة العائمة: " + e.getMessage());
+        }
+    }
+
+    private void registerFloatingControlReceiver() {
+        try {
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(FloatingControlService.ACTION_FLOATING_PAUSE);
+            filter.addAction(FloatingControlService.ACTION_FLOATING_RESUME);
+            filter.addAction(FloatingControlService.ACTION_FLOATING_STOP);
+            LocalBroadcastManager.getInstance(this)
+                    .registerReceiver(floatingControlReceiver, filter);
+        } catch (Exception e) {
+            Log.w(TAG, "فشل تسجيل مستقبل اللوحة: " + e.getMessage());
+        }
+    }
+
+    private void unregisterFloatingControlReceiver() {
+        try {
+            LocalBroadcastManager.getInstance(this)
+                    .unregisterReceiver(floatingControlReceiver);
+        } catch (Exception ignored) {
+            // غير مسجل أصلاً
+        }
     }
 }

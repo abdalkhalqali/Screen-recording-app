@@ -39,4 +39,9 @@
     <!-- حالة الأذونات -->
     <string name="perm_granted">مفعل</string>
     <string name="perm_denied">مرفوض</string>
+
+    <!-- اللوحة العائمة -->
+    <string name="floating_recording">🎬 جاري التسجيل...</string>
+    <string name="floating_paused">⏸️ تم الإيقاف المؤقت</string>
+    <string name="floating_notification_channel">التحكم بالتسجيل</string>
 </resources>
