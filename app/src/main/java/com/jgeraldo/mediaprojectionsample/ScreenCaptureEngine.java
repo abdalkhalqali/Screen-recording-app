@@ -108,6 +108,7 @@ public class ScreenCaptureEngine {
     private AudioSource audioSource = AudioSource.EXTERNAL;
     private AutoPauseMode autoPauseMode = AutoPauseMode.OFF;
 
+    private boolean isMuxerStarted = false;
     private long lastPresentationTimeUs = 0;
     private long startTimeMs = 0;
     private long pausedTimeMs = 0;
@@ -159,6 +160,12 @@ public class ScreenCaptureEngine {
             lastPresentationTimeUs = 0;
             prepareVideoEncoder();
             startAudioCapture();
+            
+            // 🎯 بدء MediaMuxer بعد إضافة كل المسارات (video + audio)
+            if (mediaMuxer != null && !isMuxerStarted) {
+                mediaMuxer.start();
+                isMuxerStarted = true;
+            }
 
             if (listener != null) {
                 mainHandler.post(listener::onRecordingStarted);
@@ -271,16 +278,16 @@ public class ScreenCaptureEngine {
     // ===================== تجهيزات الفيديو =====================
 
     private void prepareVideoEncoder() throws Exception {
-        MediaFormat format = MediaFormat.createVideoFormat(
+        MediaFormat videoFormat = MediaFormat.createVideoFormat(
                 MediaFormat.MIMETYPE_VIDEO_AVC, videoWidth, videoHeight);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, bitRate);
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate);
-        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
-        format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
+        videoFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitRate);
+        videoFormat.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate);
+        videoFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+        videoFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
 
         videoCodec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
-        videoCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        videoCodec.configure(videoFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         inputSurface = videoCodec.createInputSurface();
         videoCodec.start();
 
@@ -290,8 +297,10 @@ public class ScreenCaptureEngine {
                 MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
 
         // إضافة مسار الفيديو
-        videoTrackIndex = mediaMuxer.addTrack(format);
-        mediaMuxer.start();
+        videoTrackIndex = mediaMuxer.addTrack(videoFormat);
+        
+        // audioTrackIndex سيتم إضافته في prepareAudioEncoder قبل mediaMuxer.start()
+        
         isEncoding = true;
         isVideoCapturing = true;
     }
@@ -536,6 +545,7 @@ public class ScreenCaptureEngine {
 
             videoTrackIndex = -1;
             audioTrackIndex = -1;
+            isMuxerStarted = false;
             lastPresentationTimeUs = 0;
 
         } catch (Exception e) {
