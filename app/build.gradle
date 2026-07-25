@@ -17,12 +17,6 @@ android {
     }
 
     signingConfigs {
-        debug {
-            storeFile file("debug.keystore")
-            storePassword "android"
-            keyAlias "androiddebugkey"
-            keyPassword "android"
-        }
         release {
             storeFile rootProject.file(System.getenv("KEYSTORE_FILE") ?: "debug.keystore")
             storePassword System.getenv("KEYSTORE_PASSWORD") ?: "android"
@@ -33,7 +27,7 @@ android {
 
     buildTypes {
         debug {
-            signingConfig signingConfigs.debug
+            // استخدام debug keystore الافتراضي من Android SDK
         }
         release {
             minifyEnabled false
