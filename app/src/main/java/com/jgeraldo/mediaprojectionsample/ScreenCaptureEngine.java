@@ -180,7 +180,15 @@ public class ScreenCaptureEngine {
         stopEncoding();
 
         if (listener != null) {
-            mainHandler.post(listener::onRecordingStopped);
+            mainHandler.post(() -> {
+                listener.onRecordingStopped();
+                // إعلام المستخدم بحفظ الفيديو
+                if (videoFilePath != null) {
+                    listener.onVideoSaved(
+                            Uri.fromFile(new File(videoFilePath)),
+                            "✅ تم حفظ الفيديو في المعرض");
+                }
+            });
         }
     }
 
@@ -437,41 +445,48 @@ public class ScreenCaptureEngine {
 
     // ===================== حفظ الفيديو =====================
 
+    private String videoFilePath;
+
     private String createVideoFileName() {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
                 .format(new Date());
         String fileName = "ScreenRecord_" + timeStamp + ".mp4";
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10+ → MediaStore
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.Video.Media.RELATIVE_PATH,
-                    Environment.DIRECTORY_MOVIES + "/ScreenRecords");
-            values.put(MediaStore.Video.Media.TITLE,
-                    "تسجيل الشاشة " + timeStamp);
-            values.put(MediaStore.Video.Media.DISPLAY_NAME, fileName);
-            values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
-            values.put(MediaStore.Video.Media.DATE_ADDED, System.currentTimeMillis() / 1000);
-
-            Uri uri = contentResolver.insert(
-                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-
-            if (uri != null) {
-                // سنحفظ المسار للكتابة لاحقاً
-                try {
-                    // نستخدم FileDescriptor من ContentResolver
-                    return uri.toString();
-                } catch (Exception e) {
-                    Log.w(TAG, "فشل إنشاء ملف MediaStore: " + e.getMessage());
-                }
-            }
-        }
-
-        // الطريقة القديمة (Android 9-)
+        // نستخدم مجلد Movies/ScreenRecords مباشرة (يعمل على جميع الإصدارات)
         File dir = new File(Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_MOVIES), "ScreenRecords");
         if (!dir.exists()) dir.mkdirs();
-        return new File(dir, fileName).getAbsolutePath();
+        
+        videoFilePath = new File(dir, fileName).getAbsolutePath();
+        return videoFilePath;
+    }
+
+    private void addVideoToGallery() {
+        if (videoFilePath == null || contentResolver == null) return;
+        
+        try {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Video.Media.DATA, videoFilePath);
+            values.put(MediaStore.Video.Media.TITLE, 
+                    new File(videoFilePath).getName());
+            values.put(MediaStore.Video.Media.DISPLAY_NAME, 
+                    new File(videoFilePath).getName());
+            values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
+            values.put(MediaStore.Video.Media.DATE_ADDED, 
+                    System.currentTimeMillis() / 1000);
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                values.put(MediaStore.Video.Media.IS_PENDING, 0);
+                values.put(MediaStore.Video.Media.RELATIVE_PATH,
+                        Environment.DIRECTORY_MOVIES + "/ScreenRecords");
+            }
+            
+            contentResolver.insert(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
+            Log.d(TAG, "تم إضافة الفيديو للمعرض: " + videoFilePath);
+        } catch (Exception e) {
+            Log.w(TAG, "فشل إضافة الفيديو للمعرض: " + e.getMessage());
+        }
     }
 
     // ===================== التوقف والتنظيف =====================
@@ -515,6 +530,9 @@ public class ScreenCaptureEngine {
                 try { mediaMuxer.stop(); } catch (Exception ignored) {}
                 try { mediaMuxer.release(); } catch (Exception ignored) {}
                 mediaMuxer = null;
+                
+                // 🖼️ إضافة الفيديو للمعرض
+                addVideoToGallery();
             }
 
             videoTrackIndex = -1;
