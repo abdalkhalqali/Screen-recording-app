@@ -1,74 +1,79 @@
 package com.jgeraldo.mediaprojectionsample;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import com.jgeraldo.mediaprojectionsample.R;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import java.util.ArrayList;
+
 public class MainActivity extends AppCompatActivity {
 
-    public static final String ACTION_MEDIA_PROJECTION_STARTED = "com.jgeraldo.mediaprojectionsample.ACTION_MEDIA_PROJECTION_STARTED";
-
+    public static final String ACTION_MEDIA_PROJECTION_STARTED =
+            "com.jgeraldo.mediaprojectionsample.ACTION_MEDIA_PROJECTION_STARTED";
     public static final String TAG = "MediaProjectionSample";
 
     private boolean isReceiverRegistered = false;
+    private boolean isCapturing = false;
 
     private MediaProjectionManager mediaProjectionManager;
-
     private MediaProjection mMediaProjection;
-
     private VirtualDisplay mVirtualDisplay;
 
     private Button mButtonToggle;
-
     private Surface mSurface;
-
     private Handler mHandler;
 
     private ActivityResultLauncher<Intent> startMediaProjectionActivity;
+    private ActivityResultLauncher<String> requestPermissionLauncher;
+    private ActivityResultLauncher<Intent> overlaySettingsLauncher;
 
-    // Creating a custom BroadcastReceiver class so we can use it externally without needing to declare on the Manifest.
-    // The only reason we are using a Broadcast here is to guarantee that we'll only get the MediaProjection instance
-    //  when the service has started (otherwise it would throw an exception) and also because we want to show the
-    //  shared screen in a SurfaceView hosted on this Activity's (so we couldn't access it from the service directly).
+    // واجهة الأذونات
+    private LinearLayout permissionStatusBar;
+    private TextView permissionStatusText;
+    private ImageView permissionDot;
+    private boolean permissionsReady = false;
+
+    // BroadcastReceiver للخدمة
     public class MyBroadcastReceiver extends BroadcastReceiver {
-
         @Override
         public void onReceive(Context context, Intent intent) {
             if (ACTION_MEDIA_PROJECTION_STARTED.equals(intent.getAction())) {
-                // Handle the message from the service
                 int resultCode = intent.getIntExtra("resultCode", Activity.RESULT_CANCELED);
                 Intent data = intent.getParcelableExtra("data");
-
-                MediaProjectionManager projectionManager =
+                MediaProjectionManager pm =
                         (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                mMediaProjection = projectionManager.getMediaProjection(resultCode, data);
-
-                if (mMediaProjection != null) {
-                    // ---------------- STEP 4 ---------------------
-                    startScreenCapture();
-                }
+                mMediaProjection = pm.getMediaProjection(resultCode, data);
+                if (mMediaProjection != null) startScreenCapture();
             }
         }
     }
@@ -80,19 +85,73 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // تسجيل Launchers (يجب أن يكون في onCreate قبل STARTED state)
+        requestPermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(), isGranted -> {
+                    checkAllPermissions();
+                    if (isGranted) Log.d(TAG, "الصلاحية مفعلة");
+                });
+
+        overlaySettingsLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(), result ->
+                        checkAllPermissions());
+
+        startMediaProjectionActivity = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(), result -> {
+                    if (result == null) return;
+                    int resultCode = result.getResultCode();
+                    if (resultCode == Activity.RESULT_OK) {
+                        Intent data = result.getData();
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                            MediaProjectionManager pm = (MediaProjectionManager)
+                                    getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                            if (pm != null) {
+                                mMediaProjection = pm.getMediaProjection(resultCode, data);
+                                if (mMediaProjection != null) startScreenCapture();
+                            }
+                        } else {
+                            try {
+                                Intent si = new Intent(this, MyMediaProjectionService.class);
+                                si.putExtra("resultCode", resultCode);
+                                si.putExtra("data", data);
+                                ContextCompat.startForegroundService(this, si);
+                            } catch (RuntimeException e) {
+                                Log.w(TAG, "خطأ: " + e.getMessage());
+                            }
+                        }
+                    } else {
+                        Toast.makeText(this, getString(R.string.permission_denied),
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+        // تهيئة العناصر
         SurfaceView mSurfaceView = findViewById(R.id.surface);
         mSurface = mSurfaceView.getHolder().getSurface();
-
         mHandler = new Handler(Looper.getMainLooper());
 
         mButtonToggle = findViewById(R.id.button);
+        permissionStatusBar = findViewById(R.id.permissionStatusBar);
+        permissionStatusText = findViewById(R.id.permissionStatusText);
+        permissionDot = findViewById(R.id.permissionDot);
+
+        // زر البدء/الإيقاف
         mButtonToggle.setOnClickListener(view -> {
-            if (mVirtualDisplay == null) {
+            if (!isCapturing) {
+                if (!permissionsReady) { checkAllPermissions(); return; }
                 requestScreenCapturePermission();
             } else {
                 stopScreenCapture();
             }
         });
+
+        // شريط الأذونات - قابل للنقر
+        if (permissionStatusBar != null) {
+            permissionStatusBar.setOnClickListener(v -> showPermissionsDialog());
+        }
+
+        // فحص الأذونات بعد 500ms
+        mHandler.postDelayed(this::checkAllPermissions, 500);
     }
 
     @Override
@@ -102,48 +161,9 @@ public class MainActivity extends AppCompatActivity {
         mediaProjectionManager = (MediaProjectionManager)
                 getSystemService(MEDIA_PROJECTION_SERVICE);
 
-        // tracks the createScreenCaptureIntent() result
-        startMediaProjectionActivity =
-                registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
-                        result -> {
-                            int resultCode = result.getResultCode();
-
-                            // ---------------- STEP 2 ---------------------
-                            if (result.getResultCode() == Activity.RESULT_OK) {
-                                Intent data = result.getData();
-
-                                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                                    MediaProjectionManager projectionManager =
-                                            (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
-                                    mMediaProjection = projectionManager.getMediaProjection(resultCode, data);
-
-                                    if (mMediaProjection != null) {
-                                        // ---------------- STEP 3 (prior Android 14) ---------------------
-                                        startScreenCapture();
-                                    }
-                                } else {
-                                    try {
-                                        Intent serviceIntent = new Intent(this, MyMediaProjectionService.class);
-                                        serviceIntent.putExtra("resultCode", resultCode);
-                                        serviceIntent.putExtra("data", data);
-
-                                        // ---------------- STEP 3 (Android 14 and on) ---------------------
-                                        ContextCompat.startForegroundService(this, serviceIntent);
-                                    } catch (RuntimeException e) {
-                                        Log.w(TAG, "Error while trying to get the MediaProjection instance: " + e.getMessage());
-                                    }
-                                }
-                            } else {
-                                Toast.makeText(this, getString(R.string.permission_denied),
-                                        Toast.LENGTH_SHORT).show();
-                            }
-                        });
-
         if (!isReceiverRegistered) {
             IntentFilter filter = new IntentFilter(ACTION_MEDIA_PROJECTION_STARTED);
             filter.addCategory(Intent.CATEGORY_DEFAULT);
-
-            Log.d(TAG, "REGISTERING RECEIVER <T");
             LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
             isReceiverRegistered = true;
         }
@@ -152,64 +172,261 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
-
         if (isReceiverRegistered) {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
             isReceiverRegistered = false;
         }
-
-        if (mMediaProjection != null) {
+        if (!isCapturing && mMediaProjection != null) {
             mMediaProjection.stop();
             mMediaProjection = null;
         }
     }
 
-    private void requestScreenCapturePermission() {
-        // ---------------- STEP 1 ---------------------
-        if (startMediaProjectionActivity != null) {
-            Log.d(TAG, "REQUESTING SCREEN CAPTURE INTENT PERMISSION");
-            mediaProjectionManager = (MediaProjectionManager)
-                    getSystemService(MEDIA_PROJECTION_SERVICE);
-
-            Intent captureIntent = mediaProjectionManager.createScreenCaptureIntent();
-            Log.d(TAG, "CREATING THE SCREEN CAPTURE INTENT");
-            startMediaProjectionActivity.launch(captureIntent);
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mVirtualDisplay != null) {
+            mVirtualDisplay.release();
+            mVirtualDisplay = null;
         }
     }
 
-    public void startScreenCapture() {
-        MediaProjection.Callback callback = new MediaProjection.Callback() {
+    // ========== نظام الأذونات ==========
+
+    /**
+     * فحص جميع الأذونات وتحديث واجهة المستخدم
+     */
+    private void checkAllPermissions() {
+        String[] missing = getMissingPermissions();
+        permissionsReady = (missing.length == 0);
+
+        if (permissionStatusBar == null || permissionStatusText == null || permissionDot == null)
+            return;
+
+        if (permissionsReady) {
+            // كل الأذونات مفعلة → إخفاء الشريط
+            permissionStatusBar.setVisibility(View.GONE);
+            permissionDot.setImageResource(R.drawable.permission_dot_green);
+            mButtonToggle.setEnabled(true);
+            mButtonToggle.setAlpha(1f);
+        } else {
+            // يوجد أذونات ناقصة → إظهار الشريط
+            permissionStatusBar.setVisibility(View.VISIBLE);
+            permissionDot.setImageResource(R.drawable.permission_dot_amber);
+
+            StringBuilder msg = new StringBuilder("⚠️ ");
+            for (int i = 0; i < missing.length; i++) {
+                msg.append(getPermissionDisplayName(missing[i]));
+                if (i < missing.length - 1) msg.append("، ");
+            }
+            permissionStatusText.setText(msg.toString());
+            mButtonToggle.setEnabled(true);
+            mButtonToggle.setAlpha(1f);
+        }
+    }
+
+    /**
+     * @return مصفوفة بالأذونات الناقصة
+     */
+    private String[] getMissingPermissions() {
+        ArrayList<String> missing = new ArrayList<>();
+
+        // الصوت
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED) {
+            missing.add(Manifest.permission.RECORD_AUDIO);
+        }
+
+        // الإشعارات (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.POST_NOTIFICATIONS);
+            }
+            // الوسائط (Android 13+)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_IMAGES)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.READ_MEDIA_IMAGES);
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_MEDIA_VIDEO)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.READ_MEDIA_VIDEO);
+            }
+        } else if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
+            // التخزين (Android 12-)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            }
+        }
+
+        // النوافذ العائمة (Android 6+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                !Settings.canDrawOverlays(this)) {
+            missing.add(Manifest.permission.SYSTEM_ALERT_WINDOW);
+        }
+
+        return missing.toArray(new String[0]);
+    }
+
+    /**
+     * @return الاسم العربي للإذن
+     */
+    private String getPermissionDisplayName(String permission) {
+        switch (permission) {
+            case Manifest.permission.RECORD_AUDIO:
+                return getString(R.string.perm_record_audio);
+            case Manifest.permission.POST_NOTIFICATIONS:
+                return getString(R.string.perm_post_notifications);
+            case Manifest.permission.READ_MEDIA_IMAGES:
+                return getString(R.string.perm_read_images);
+            case Manifest.permission.READ_MEDIA_VIDEO:
+                return getString(R.string.perm_read_video);
+            case Manifest.permission.WRITE_EXTERNAL_STORAGE:
+                return getString(R.string.perm_write_storage);
+            case Manifest.permission.SYSTEM_ALERT_WINDOW:
+                return getString(R.string.perm_overlay);
+            default:
+                return permission;
+        }
+    }
+
+    /**
+     * عرض نافذة الأذونات وطلب الأذونات الناقصة
+     */
+    private void showPermissionsDialog() {
+        String[] missing = getMissingPermissions();
+        if (missing.length == 0) {
+            Toast.makeText(this, R.string.permissions_ok, Toast.LENGTH_SHORT).show();
+            checkAllPermissions();
+            return;
+        }
+
+        // بناء قائمة بأسماء الأذونات
+        String[] items = new String[missing.length];
+        for (int i = 0; i < missing.length; i++) {
+            items[i] = getPermissionDisplayName(missing[i]);
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.permissions_title)
+                .setItems(items, (dialog, which) -> {
+                    requestSpecificPermission(missing[which]);
+                })
+                .setPositiveButton(R.string.btn_close, null)
+                .show();
+    }
+
+    /**
+     * طلب إذن محدد مع شرح مسبق
+     */
+    private void requestSpecificPermission(String permission) {
+        if (permission.equals(Manifest.permission.SYSTEM_ALERT_WINDOW)) {
+            // النوافذ العائمة تحتاج فتح الإعدادات
+            showOverlayPermissionDialog();
+            return;
+        }
+
+        // هل نحتاج شرح؟
+        if (ActivityCompat.shouldShowRequestPermissionRationale(this, permission)) {
+            showPermissionExplanation(permission);
+        } else {
+            requestPermissionLauncher.launch(permission);
+        }
+    }
+
+    /**
+     * عرض شرح للإذن قبل طلبه
+     */
+    private void showPermissionExplanation(String permission) {
+        String title, message;
+
+        switch (permission) {
+            case Manifest.permission.RECORD_AUDIO:
+                title = getString(R.string.explain_audio_title);
+                message = getString(R.string.explain_audio_msg);
+                break;
+            case Manifest.permission.POST_NOTIFICATIONS:
+                title = getString(R.string.explain_notif_title);
+                message = getString(R.string.explain_notif_msg);
+                break;
+            case Manifest.permission.READ_MEDIA_IMAGES:
+            case Manifest.permission.READ_MEDIA_VIDEO:
+            case Manifest.permission.WRITE_EXTERNAL_STORAGE:
+                title = getString(R.string.explain_storage_title);
+                message = getString(R.string.explain_storage_msg);
+                break;
+            default:
+                title = "إذن مطلوب";
+                message = "هذا الإذن ضروري لعمل التطبيق.";
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton(getString(R.string.btn_allow),
+                        (d, w) -> requestPermissionLauncher.launch(permission))
+                .setNegativeButton(getString(R.string.btn_later), null)
+                .show();
+    }
+
+    /**
+     * شرح إذن النوافذ العائمة (يتطلب فتح الإعدادات)
+     */
+    private void showOverlayPermissionDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.explain_overlay_title))
+                .setMessage(getString(R.string.explain_overlay_msg))
+                .setCancelable(false)
+                .setPositiveButton(getString(R.string.btn_open_settings), (d, w) -> {
+                    Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:" + getPackageName()));
+                    overlaySettingsLauncher.launch(intent);
+                })
+                .setNegativeButton(getString(R.string.btn_later), null)
+                .show();
+    }
+
+    // ========== تسجيل الشاشة ==========
+
+    private void requestScreenCapturePermission() {
+        if (startMediaProjectionActivity != null) {
+            mediaProjectionManager = (MediaProjectionManager)
+                    getSystemService(MEDIA_PROJECTION_SERVICE);
+            startMediaProjectionActivity.launch(
+                    mediaProjectionManager.createScreenCaptureIntent());
+        }
+    }
+
+    private void startScreenCapture() {
+        if (mMediaProjection == null) return;
+
+        mMediaProjection.registerCallback(new MediaProjection.Callback() {
             @Override
             public void onStop() {
                 super.onStop();
-                // Handle MediaProjection stopped event here
             }
-        };
-
-        mMediaProjection.registerCallback(callback, null);
+        }, null);
 
         mVirtualDisplay = mMediaProjection.createVirtualDisplay(
                 getString(R.string.screen_capture_title),
-                720,
-                1080,
+                720, 1080,
                 getResources().getDisplayMetrics().densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY |
                         DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
-                mSurface,
-                null,
-                mHandler);
+                mSurface, null, mHandler);
 
+        isCapturing = true;
         mButtonToggle.setText(R.string.button_stop);
-
-        // Do whatever you need with the virtualDisplay
     }
 
     private void stopScreenCapture() {
-        if (mVirtualDisplay == null) {
-            return;
-        }
+        if (mVirtualDisplay == null) return;
+
         mVirtualDisplay.release();
         mVirtualDisplay = null;
+        isCapturing = false;
         mButtonToggle.setText(R.string.button_start);
     }
 }

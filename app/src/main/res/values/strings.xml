@@ -1,9 +1,42 @@
 <resources>
     <string name="app_name">مسجل الشاشة</string>
-    <string name="button_start">ابدأ</string>
+    <string name="button_start">ابدأ التسجيل</string>
     <string name="button_stop">إيقاف</string>
     <string name="hello_world">مرحباً بك في تطبيق تسجيل الشاشة</string>
-    <string name="permission_denied">تم رفض إذن مشاركة الشاشة</string>
+    <string name="permission_denied">تم رفض الإذن</string>
     <string name="notification_channel_name">تسجيل الشاشة</string>
     <string name="screen_capture_title">تسجيل الشاشة</string>
+
+    <!-- شريط الأذونات -->
+    <string name="permissions_ok">✅ جميع الصلاحيات مفعلة</string>
+    <string name="permissions_missing">⚠️ صلاحيات ناقصة: اضغط للتفعيل</string>
+    <string name="permissions_title">صلاحيات التطبيق</string>
+
+    <!-- أسماء الأذونات -->
+    <string name="perm_record_audio">الميكروفون</string>
+    <string name="perm_post_notifications">الإشعارات</string>
+    <string name="perm_read_images">قراءة الصور</string>
+    <string name="perm_read_video">قراءة الفيديو</string>
+    <string name="perm_write_storage">التخزين</string>
+    <string name="perm_overlay">النوافذ العائمة</string>
+
+    <!-- شرح الأذونات -->
+    <string name="explain_audio_title">إذن الميكروفون</string>
+    <string name="explain_audio_msg">نحتاج إلى إذن الميكروفون لتسجيل الصوت مع الفيديو.</string>
+    <string name="explain_notif_title">إذن الإشعارات</string>
+    <string name="explain_notif_msg">نحتاج لعرض إشعار أثناء التسجيل لإبقاء التطبيق نشطاً.</string>
+    <string name="explain_storage_title">إذن التخزين</string>
+    <string name="explain_storage_msg">نحتاج لحفظ لقطات الشاشة وتسجيلات الفيديو في جهازك.</string>
+    <string name="explain_overlay_title">إذن النوافذ العائمة</string>
+    <string name="explain_overlay_msg">نحتاج لعرض لوحة التحكم العائمة أثناء التسجيل.\n\nسيتم تحويلك إلى الإعدادات لتفعيلها.</string>
+
+    <!-- أزرار -->
+    <string name="btn_allow">✅ السماح</string>
+    <string name="btn_later">🚫 لاحقاً</string>
+    <string name="btn_open_settings">⚙️ فتح الإعدادات</string>
+    <string name="btn_close">إغلاق</string>
+
+    <!-- حالة الأذونات -->
+    <string name="perm_granted">مفعل</string>
+    <string name="perm_denied">مرفوض</string>
 </resources>
