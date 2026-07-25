@@ -5,7 +5,7 @@ import android.content.ContentValues;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
-import android.graphics.Rect;
+import android.hardware.display.DisplayManager;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.Image;
@@ -95,7 +95,6 @@ public class ScreenCaptureEngine {
     private int videoTrackIndex = -1;
     private int audioTrackIndex = -1;
 
-    private ImageReader videoReader;
     private ImageReader screenshotReader;
     private Surface inputSurface;
     private volatile boolean isVideoCapturing = false;
@@ -160,7 +159,14 @@ public class ScreenCaptureEngine {
             lastPresentationTimeUs = 0;
             prepareVideoEncoder();
             startAudioCapture();
-            startVideoFrameCapture();
+            
+            // 🎬 إنشاء VirtualDisplay مباشرة من inputSurface (بدون ImageReader إضافي)
+            if (mediaProjection != null && inputSurface != null) {
+                mediaProjection.createVirtualDisplay(
+                        "VideoCapture", videoWidth, videoHeight, 160,
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        inputSurface, null, mainHandler);
+            }
 
             if (listener != null) {
                 mainHandler.post(listener::onRecordingStarted);
@@ -217,7 +223,6 @@ public class ScreenCaptureEngine {
 
     public void release() {
         stopVideoCapture();
-        releaseVideoReader();
         releaseScreenshotReader();
     }
 
@@ -282,22 +287,7 @@ public class ScreenCaptureEngine {
         isVideoCapturing = true;
     }
 
-    private void startVideoFrameCapture() {
-        createVideoReader(videoWidth, videoHeight);
-        Surface surface = videoReader.getSurface();
-        mediaProjection.createVirtualDisplay(
-                "VideoCapture", videoWidth, videoHeight, 160,
-                0, surface, null, null);
-    }
-
-    private void createVideoReader(int width, int height) {
-        releaseVideoReader();
-        videoReader = ImageReader.newInstance(width, height, ImageFormat.YUV_420_888, 2);
-        videoReader.setOnImageAvailableListener(reader -> {
-            // معالجة الإطارات - يتم التعامل معها عبر Surface مباشرة
-            // MediaCodec يلتقط الإطارات من Surface الخاص به
-        }, mainHandler);
-    }
+    // تم إلغاء startVideoFrameCapture - نستخدم inputSurface من MediaCodec مباشرة
 
     // ===================== تسجيل الصوت =====================
 
@@ -554,14 +544,6 @@ public class ScreenCaptureEngine {
             audioRecord = null;
         }
         isAudioCapturing = false;
-    }
-
-    private void releaseVideoReader() {
-        if (videoReader != null) {
-            try { videoReader.setOnImageAvailableListener(null, null); } catch (Exception ignored) {}
-            try { videoReader.close(); } catch (Exception ignored) {}
-            videoReader = null;
-        }
     }
 
     private void releaseScreenshotReader() {
