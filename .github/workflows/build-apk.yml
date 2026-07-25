@@ -27,16 +27,28 @@ jobs:
       - name: 🔧 منح صلاحيات التنفيذ لـ Gradle
         run: chmod +x gradlew
 
-      - name: 🏗️ بناء APK (Debug)
-        run: ./gradlew assembleDebug --no-daemon
+      - name: 🔑 إنشاء Keystore للتوقيع
+        run: |
+          keytool -genkey -v -keystore release.keystore \
+            -alias screenrecorder -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass screenrec -keypass screenrec \
+            -dname "CN=ScreenRecorder, OU=Dev, O=App, L=City, S=State, C=SA"
+
+      - name: 🏗️ بناء APK (Release موقّع)
+        run: |
+          export KEYSTORE_FILE="release.keystore"
+          export KEYSTORE_PASSWORD="screenrec"
+          export KEY_ALIAS="screenrecorder"
+          export KEY_PASSWORD="screenrec"
+          ./gradlew assembleRelease --no-daemon
 
       - name: 📦 رفع APK كـ Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ScreenRecorder-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/release/app-release.apk
           retention-days: 7
           if-no-files-found: error
 
       - name: 📋 عرض معلومات الحجم
-        run: ls -lh app/build/outputs/apk/debug/app-debug.apk || echo "لم يتم العثور على APK"
+        run: ls -lh app/build/outputs/apk/release/app-release.apk || echo "لم يتم العثور على APK"
