@@ -159,18 +159,27 @@ public class ScreenCaptureEngine {
             lastPresentationTimeUs = 0;
             prepareVideoEncoder();
             startAudioCapture();
-            
-            // 🎬 إنشاء VirtualDisplay مباشرة من inputSurface (بدون ImageReader إضافي)
-            if (mediaProjection != null && inputSurface != null) {
-                mediaProjection.createVirtualDisplay(
-                        "VideoCapture", videoWidth, videoHeight, 160,
-                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                        inputSurface, null, mainHandler);
-            }
 
             if (listener != null) {
                 mainHandler.post(listener::onRecordingStarted);
             }
+
+            // تأخير 300ms للتأكد من جاهزية inputSurface قبل إنشاء VirtualDisplay
+            mainHandler.postDelayed(() -> {
+                if (mediaProjection != null && inputSurface != null && isCapturing.get()) {
+                    try {
+                        mediaProjection.createVirtualDisplay(
+                                "VideoCapture", videoWidth, videoHeight, 160,
+                                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                                inputSurface, null, mainHandler);
+                        Log.d(TAG, "VirtualDisplay created successfully");
+                    } catch (Exception e) {
+                        Log.e(TAG, "فشل VirtualDisplay: " + e.getMessage());
+                        isCapturing.set(false);
+                        notifyError("فشل بدء التسجيل: " + e.getMessage());
+                    }
+                }
+            }, 300);
         } catch (Exception e) {
             Log.e(TAG, "فشل بدء التسجيل: " + e.getMessage(), e);
             isCapturing.set(false);
