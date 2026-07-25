@@ -13,6 +13,7 @@ import android.graphics.Point;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.os.Looper;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -198,7 +199,18 @@ public class FloatingControlService extends Service {
         params.x = 50;
         params.y = 200;
 
-        windowManager.addView(floatingView, params);
+        // فحص الصلاحية قبل إضافة النافذة العائمة
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            stopSelf();
+            return;
+        }
+
+        try {
+            windowManager.addView(floatingView, params);
+        } catch (Exception e) {
+            stopSelf();
+            return;
+        }
 
         // Show with animation
         floatingView.setAlpha(0f);
