@@ -119,8 +119,27 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Try to set the main layout. If it fails, show error on screen.
         try {
             setContentView(R.layout.activity_main);
+        } catch (Throwable t) {
+            Log.e(TAG, "LAYOUT FAILED: " + t, t);
+            android.widget.ScrollView sv = new android.widget.ScrollView(this);
+            android.widget.TextView tv = new android.widget.TextView(this);
+            tv.setText("🔴 ERROR: " + t.getClass().getSimpleName() + "\n\n" +
+                    (t.getMessage() != null ? t.getMessage() : "") + "\n\n" +
+                    "📋 Stack:\n" + android.util.Log.getStackTraceString(t));
+            tv.setTextColor(0xFFFF4444);
+            tv.setTextSize(13f);
+            tv.setTypeface(android.graphics.Typeface.MONOSPACE);
+            tv.setPadding(24, 48, 24, 24);
+            tv.setBackgroundColor(0xFF1A1A2E);
+            sv.setBackgroundColor(0xFF1A1A2E);
+            sv.addView(tv);
+            setContentView(sv);
+            return;
+        }
 
             mHandler = new Handler(Looper.getMainLooper());
 
