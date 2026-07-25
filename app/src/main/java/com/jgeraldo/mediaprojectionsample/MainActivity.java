@@ -56,7 +56,6 @@ public class MainActivity extends AppCompatActivity {
 
     // محرك التسجيل
     private ScreenCaptureEngine captureEngine;
-    private ScreenCaptureEngine.AudioSource audioSourceMode = ScreenCaptureEngine.AudioSource.EXTERNAL;
     private int displayWidth = 720, displayHeight = 1280;
 
     // الإعدادات
@@ -190,7 +189,6 @@ public class MainActivity extends AppCompatActivity {
 
         if (!isReceiverRegistered) {
             IntentFilter filter = new IntentFilter(ACTION_MEDIA_PROJECTION_STARTED);
-            filter.addCategory(Intent.CATEGORY_DEFAULT);
             LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
             isReceiverRegistered = true;
         }
@@ -443,25 +441,26 @@ public class MainActivity extends AppCompatActivity {
         try {
             // إنشاء محرك التسجيل
             captureEngine = new ScreenCaptureEngine(mMediaProjection, getContentResolver());
-            captureEngine.setAudioSource(audioSourceMode);
 
             // تسجيل المستمع
             captureEngine.setOnCaptureListener(new ScreenCaptureEngine.OnCaptureListener() {
                 @Override
-                public void onScreenshotSaved(Uri uri, String message) {
+                public void onRecordingStarted() {
                     runOnUiThread(() -> {
-                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
-                        openFile(uri, "image/*");
+                        isCapturing = true;
+                        mButtonToggle.setText(R.string.button_stop);
+                        showFloatingControl();
+                        Toast.makeText(MainActivity.this, "🎬 بدأ التسجيل", Toast.LENGTH_SHORT).show();
                     });
                 }
                 @Override
-                public void onVideoSaved(Uri uri, String message) {
+                public void onRecordingStopped(Uri videoUri, String message) {
                     runOnUiThread(() -> {
                         Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
                         isCapturing = false;
                         mButtonToggle.setText(R.string.button_start);
                         hideFloatingControl();
-                        openFile(uri, "video/*");
+                        openFile(videoUri, "video/*");
                     });
                 }
                 @Override
@@ -475,42 +474,10 @@ public class MainActivity extends AppCompatActivity {
                         }
                     });
                 }
-                @Override
-                public void onRecordingStarted() {
-                    runOnUiThread(() -> {
-                        isCapturing = true;
-                        mButtonToggle.setText(R.string.button_stop);
-                        showFloatingControl();
-                    });
-                }
-                @Override
-                public void onRecordingStopped() {
-                    runOnUiThread(() -> {
-                        isCapturing = false;
-                        hideFloatingControl();
-                    });
-                }
-                @Override
-                public void onRecordingPaused() {
-                    runOnUiThread(() -> {
-                        Toast.makeText(MainActivity.this, "⏸️ تم الإيقاف المؤقت", Toast.LENGTH_SHORT).show();
-                        mButtonToggle.setText("⏸️");
-                    });
-                }
-                @Override
-                public void onRecordingResumed() {
-                    runOnUiThread(() -> {
-                        Toast.makeText(MainActivity.this, "▶️ تم الاستئناف", Toast.LENGTH_SHORT).show();
-                        mButtonToggle.setText(R.string.button_stop);
-                    });
-                }
-                @Override
-                public void onRecordingStateUpdated(boolean paused, long elapsedMs) {
-                }
             });
 
             // بدء التسجيل
-            captureEngine.startVideoCapture(displayWidth, displayHeight);
+            captureEngine.startRecording(displayWidth, displayHeight);
 
         } catch (Exception e) {
             Log.e(TAG, "فشل بدء التسجيل: " + e.getMessage());
@@ -521,7 +488,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void stopScreenCapture() {
         if (captureEngine != null) {
-            captureEngine.stopVideoCapture();
+            captureEngine.stopRecording();
             captureEngine.release();
             captureEngine = null;
         }
