@@ -7,13 +7,4 @@
     <string name="permission_denied">تم رفض إذن مشاركة الشاشة</string>
     <string name="notification_channel_name">تسجيل الشاشة</string>
     <string name="screen_capture_title">تسجيل الشاشة</string>
-    <string name="mode_screenshot">🖼️ لقطة شاشة</string>
-    <string name="mode_video">🎬 تسجيل فيديو</string>
-    <string name="mode_both">✨ لقطة + فيديو</string>
-    <string name="label_capture_mode">نوع الالتقاط:</string>
-    <string name="screenshot_saved">✅ تم حفظ لقطة الشاشة بنجاح</string>
-    <string name="video_saved">✅ تم حفظ تسجيل الفيديو بنجاح</string>
-    <string name="capture_error">❌ فشل الالتقاط، حاول مرة أخرى</string>
-    <string name="start_first">👆 ابدأ التسجيل أولاً</string>
-    <string name="screenshot_during_recording">📸 تم التقاط لقطة أثناء التسجيل</string>
 </resources>
