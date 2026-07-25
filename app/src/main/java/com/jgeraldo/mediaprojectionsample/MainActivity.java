@@ -302,7 +302,6 @@ public class MainActivity extends AppCompatActivity {
         updateCaptureInfo();
         mHandler.postDelayed(() -> checkAllPermissionsAndUpdateUI(), 500);
     }
-    }
 
     @Override
     protected void onStart() {
