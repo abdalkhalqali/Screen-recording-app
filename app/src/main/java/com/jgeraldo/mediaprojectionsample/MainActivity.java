@@ -54,6 +54,14 @@ public class MainActivity extends AppCompatActivity {
     private Surface mSurface;
     private Handler mHandler;
 
+    // محرك التسجيل
+    private ScreenCaptureEngine captureEngine;
+    private ScreenCaptureEngine.AudioSource audioSourceMode = ScreenCaptureEngine.AudioSource.EXTERNAL;
+    private int displayWidth = 720, displayHeight = 1280;
+
+    // الإعدادات
+    private SettingsPrefs settingsPrefs;
+
     private ActivityResultLauncher<Intent> startMediaProjectionActivity;
     private ActivityResultLauncher<String> requestPermissionLauncher;
     private ActivityResultLauncher<Intent> overlaySettingsLauncher;
@@ -151,6 +159,9 @@ public class MainActivity extends AppCompatActivity {
         permissionStatusText = findViewById(R.id.permissionStatusText);
         permissionDot = findViewById(R.id.permissionDot);
 
+        // تهيئة الإعدادات
+        settingsPrefs = new SettingsPrefs(this);
+
         // زر البدء/الإيقاف
         mButtonToggle.setOnClickListener(view -> {
             if (!isCapturing) {
@@ -208,6 +219,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (captureEngine != null) {
+            captureEngine.release();
+            captureEngine = null;
+        }
         if (mVirtualDisplay != null) {
             mVirtualDisplay.release();
             mVirtualDisplay = null;
@@ -425,38 +440,114 @@ public class MainActivity extends AppCompatActivity {
     private void startScreenCapture() {
         if (mMediaProjection == null) return;
 
-        mMediaProjection.registerCallback(new MediaProjection.Callback() {
-            @Override
-            public void onStop() {
-                super.onStop();
-            }
-        }, null);
+        try {
+            // إنشاء محرك التسجيل
+            captureEngine = new ScreenCaptureEngine(mMediaProjection, getContentResolver());
+            captureEngine.setAudioSource(audioSourceMode);
 
-        mVirtualDisplay = mMediaProjection.createVirtualDisplay(
-                getString(R.string.screen_capture_title),
-                720, 1080,
-                getResources().getDisplayMetrics().densityDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY |
-                        DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
-                mSurface, null, mHandler);
+            // تسجيل المستمع
+            captureEngine.setOnCaptureListener(new ScreenCaptureEngine.OnCaptureListener() {
+                @Override
+                public void onScreenshotSaved(Uri uri, String message) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                        openFile(uri, "image/*");
+                    });
+                }
+                @Override
+                public void onVideoSaved(Uri uri, String message) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, message, Toast.LENGTH_SHORT).show();
+                        isCapturing = false;
+                        mButtonToggle.setText(R.string.button_start);
+                        hideFloatingControl();
+                        openFile(uri, "video/*");
+                    });
+                }
+                @Override
+                public void onCaptureError(String error) {
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+                        if (isCapturing) {
+                            isCapturing = false;
+                            mButtonToggle.setText(R.string.button_start);
+                            hideFloatingControl();
+                        }
+                    });
+                }
+                @Override
+                public void onRecordingStarted() {
+                    runOnUiThread(() -> {
+                        isCapturing = true;
+                        mButtonToggle.setText(R.string.button_stop);
+                        showFloatingControl();
+                    });
+                }
+                @Override
+                public void onRecordingStopped() {
+                    runOnUiThread(() -> {
+                        isCapturing = false;
+                        hideFloatingControl();
+                    });
+                }
+                @Override
+                public void onRecordingPaused() {
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, "⏸️ تم الإيقاف المؤقت", Toast.LENGTH_SHORT).show();
+                        mButtonToggle.setText("⏸️");
+                    });
+                }
+                @Override
+                public void onRecordingResumed() {
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, "▶️ تم الاستئناف", Toast.LENGTH_SHORT).show();
+                        mButtonToggle.setText(R.string.button_stop);
+                    });
+                }
+                @Override
+                public void onRecordingStateUpdated(boolean paused, long elapsedMs) {
+                }
+            });
 
-        isCapturing = true;
-        mButtonToggle.setText(R.string.button_stop);
+            // بدء التسجيل
+            captureEngine.startVideoCapture(displayWidth, displayHeight);
 
-        // 🪟 إظهار اللوحة العائمة
-        showFloatingControl();
+        } catch (Exception e) {
+            Log.e(TAG, "فشل بدء التسجيل: " + e.getMessage());
+            Toast.makeText(this, "❌ فشل بدء التسجيل", Toast.LENGTH_LONG).show();
+            stopScreenCapture();
+        }
     }
 
     private void stopScreenCapture() {
-        if (mVirtualDisplay == null) return;
-
-        mVirtualDisplay.release();
-        mVirtualDisplay = null;
+        if (captureEngine != null) {
+            captureEngine.stopVideoCapture();
+            captureEngine.release();
+            captureEngine = null;
+        }
+        if (mVirtualDisplay != null) {
+            mVirtualDisplay.release();
+            mVirtualDisplay = null;
+        }
+        if (mMediaProjection != null) {
+            mMediaProjection.stop();
+            mMediaProjection = null;
+        }
         isCapturing = false;
         mButtonToggle.setText(R.string.button_start);
-
-        // 🪟 إخفاء اللوحة العائمة
         hideFloatingControl();
+    }
+
+    private void openFile(Uri uri, String mimeType) {
+        try {
+            Intent openIntent = new Intent(Intent.ACTION_VIEW);
+            openIntent.setDataAndType(uri, mimeType);
+            openIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            if (openIntent.resolveActivity(getPackageManager()) != null)
+                startActivity(Intent.createChooser(openIntent, "فتح بـ"));
+        } catch (Exception e) {
+            Log.w(TAG, "فشل فتح الملف: " + e.getMessage());
+        }
     }
 
     // ========== اللوحة العائمة ==========

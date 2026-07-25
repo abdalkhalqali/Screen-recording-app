@@ -44,4 +44,16 @@
     <string name="floating_recording">🎬 جاري التسجيل...</string>
     <string name="floating_paused">⏸️ تم الإيقاف المؤقت</string>
     <string name="floating_notification_channel">التحكم بالتسجيل</string>
+
+    <!-- التسجيل والحفظ -->
+    <string name="recording_started">🎬 بدأ التسجيل</string>
+    <string name="recording_stopped">⏹️ تم إيقاف التسجيل</string>
+    <string name="recording_paused">⏸️ تم الإيقاف المؤقت</string>
+    <string name="recording_resumed">▶️ تم الاستئناف</string>
+    <string name="screenshot_saved">✅ تم حفظ اللقطة</string>
+    <string name="video_saved">✅ تم حفظ الفيديو</string>
+    <string name="error_recording">❌ فشل التسجيل</string>
+    <string name="start_first">ابدأ التسجيل أولاً</string>
+    <string name="open_with">فتح بـ</string>
+    <string name="share_video">مشاركة الفيديو</string>
 </resources>
